@@ -225,7 +225,7 @@ body{
 
 <script>
 // ============================================================
-//  SLITHER.IO — ULTRA FLUIDO & IA EN ENJAMBRE (TODOS CONTRA TODOS)
+//  SLITHER.IO — ULTRA FLUIDO & MULTIJUGADOR REAL
 // ============================================================
 
 const WORLD_W     = 4000, WORLD_H = 4000;
@@ -275,10 +275,9 @@ let selectedSkin = 0;
 let mouseX = 0, mouseY = 0, boosting = false;
 let animId = null;
 
-// ── Socket Online Setup & Fluid Engine ──────────────────────
+// ── Socket Online Setup ─────────────────────────────────────
 const socket = io({ autoConnect: false });
 
-// Estructuras de almacenamiento independientes para cada modo
 const bots = { foods: [], snakes: [], player: null, cam: { x: 0, y: 0 } };
 const online = { foods: [], snakes: [], player: null, cam: { x: 0, y: 0 } };
 
@@ -292,7 +291,6 @@ function lerpAngle(snake, target, speed) {
 }
 function snakeRadius(score) { return BASE_RADIUS + Math.min(score/120, 15); }
 
-// Generar comida con puntuación alta solicitada (+5, +10, +17)
 function spawnFoodItem(foodArray, x, y, forcedValue = null) {
   const hue = Math.random() * 360;
   let value = forcedValue;
@@ -301,14 +299,14 @@ function spawnFoodItem(foodArray, x, y, forcedValue = null) {
   if (!value) {
     const chance = Math.random();
     if (chance < 0.5) {
-      value = Math.floor(Math.random() * 5) + 5; // Chicas: 5 a 9 puntos
+      value = Math.floor(Math.random() * 5) + 5;
       r = 4.5 + (value - 5) * 0.5;
     } else {
-      value = 10; // Medianas: 10 puntos
+      value = 10;
       r = 7;
     }
   } else if (value === 17) {
-    r = 11; // Grandes: 17 puntos
+    r = 11;
   }
 
   foodArray.push({
@@ -322,11 +320,9 @@ function spawnFoodItem(foodArray, x, y, forcedValue = null) {
 // ── Inicializador del Modo Bots ─────────────────────────────
 function initBots() {
   bots.foods = []; bots.snakes = [];
-  
   for(let i=0; i<FOOD_COUNT; i++) {
     spawnFoodItem(bots.foods, Math.random()*WORLD_W, Math.random()*WORLD_H);
   }
-
   const px = WORLD_W/2, py = WORLD_H/2;
   const pName = document.getElementById('nickname').value.trim() || 'Tú (Líder)';
   bots.player = {
@@ -342,18 +338,19 @@ function initBots() {
       segs: [], name: BOT_NAMES[i % BOT_NAMES.length] + ` [${i+1}]`,
       skin: SKIN_COLORS[i % SKIN_COLORS.length], isPlayer: false,
       angle: Math.random()*Math.PI*2, alive: true, score: Math.floor(Math.random()*60), 
-      boost: false, aiTimer: 0, targetMode: 'food'
+      boost: false, aiTimer: 0
     };
     for (let j=0;j<10;j++) bot.segs.push({x:bx-j*SEGMENT_GAP, y:by});
     bots.snakes.push(bot);
   }
 }
 
-// ── Inicializador del Modo Online ───────────────────────────
+// ── Inicializador del Modo Online Real ──────────────────────
 function initOnline() {
-  online.foods = []; online.snakes = [];
-  
-  // Rellenar mapa con comida reactiva de alto puntaje
+  online.foods = []; 
+  online.snakes = []; // Comienza completamente vacío de jugadores artificiales
+
+  // Generar comida inicial local distribuida
   for(let i=0; i<FOOD_COUNT; i++) {
     spawnFoodItem(online.foods, Math.random()*WORLD_W, Math.random()*WORLD_H);
   }
@@ -363,24 +360,77 @@ function initOnline() {
   const pName = document.getElementById('nickname').value.trim() || 'Player_Online';
   
   online.player = {
-    segs: [], name: pName, skin: SKIN_COLORS[selectedSkin], isPlayer: true,
+    id: 'me', segs: [], name: pName, skin: SKIN_COLORS[selectedSkin], isPlayer: true,
     angle: 0, alive: true, score: 0, boost: false
   };
   for (let i=0; i<12; i++) online.player.segs.push({x:px-i*SEGMENT_GAP, y:py});
   online.snakes.push(online.player);
 
-  // Instanciar otros rivales de la red en la sala local fluida
-  for (let i=0; i<15; i++) {
-    const bx = Math.random()*WORLD_W, by = Math.random()*WORLD_H;
-    const netEnemy = {
-      segs: [], name: 'User_' + Math.floor(Math.random()*899 + 100),
-      skin: SKIN_COLORS[(i + 2) % SKIN_COLORS.length], isPlayer: false,
-      angle: Math.random()*Math.PI*2, alive: true, score: Math.floor(Math.random()*70),
-      boost: false, aiTimer: 0
-    };
-    for (let j=0; j<10; j++) netEnemy.segs.push({x:bx-j*SEGMENT_GAP, y:by});
-    online.snakes.push(netEnemy);
+  // Conectar WebSocket con el servidor real
+  if(!socket.connected) {
+    socket.connect();
   }
+
+  // Notificar entrada al servidor remoto
+  socket.emit('join-game', {
+    name: pName,
+    skin: selectedSkin,
+    x: px,
+    y: py
+  });
+}
+
+// ── Sincronización en Red de Jugadores Reales ───────────────
+socket.on('current-players', (serverPlayers) => {
+  if (gameMode !== 'online') return;
+  // Añadir jugadores remotos existentes en la sesión del servidor
+  Object.keys(serverPlayers).forEach(id => {
+    if(id !== socket.id) {
+      createRemotePlayer(id, serverPlayers[id]);
+    }
+  });
+});
+
+socket.on('new-player', (playerData) => {
+  if (gameMode !== 'online') return;
+  // Cuando otra persona real se une al servidor de manera dinámica
+  if(playerData.id !== socket.id) {
+    createRemotePlayer(playerData.id, playerData);
+  }
+});
+
+socket.on('player-moved', (playerData) => {
+  if (gameMode !== 'online') return;
+  const remote = online.snakes.find(s => s.id === playerData.id);
+  if (remote) {
+    remote.angle = playerData.angle;
+    remote.boost = playerData.boost;
+    remote.score = playerData.score;
+    remote.segs = playerData.segs; // Sincroniza su posición exacta enviada
+  }
+});
+
+socket.on('player-disconnected', (id) => {
+  if (gameMode !== 'online') return;
+  online.snakes = online.snakes.filter(s => s.id !== id);
+});
+
+function createRemotePlayer(id, data) {
+  const exists = online.snakes.some(s => s.id === id);
+  if (exists) return;
+
+  const remoteSnake = {
+    id: id,
+    segs: data.segs || [{x: data.x, y: data.y}],
+    name: data.name || 'Invitado',
+    skin: SKIN_COLORS[data.skin] || SKIN_COLORS[0],
+    isPlayer: false,
+    angle: data.angle || 0,
+    alive: true,
+    score: data.score || 0,
+    boost: data.boost || false
+  };
+  online.snakes.push(remoteSnake);
 }
 
 function updateBotAI(bot, leader, currentFoods) {
@@ -394,7 +444,7 @@ function updateBotAI(bot, leader, currentFoods) {
   if (head.y < margin) { lerpAngle(bot, Math.PI/2, TURN_SPEED*2.5); return; }
   if (head.y > WORLD_H - margin) { lerpAngle(bot, -Math.PI/2, TURN_SPEED*2.5); return; }
 
-  const currentSnakes = gameMode === 'bots' ? bots.snakes : online.snakes;
+  const currentSnakes = bots.snakes;
 
   for (let i=0; i<currentSnakes.length; i++) {
     const other = currentSnakes[i];
@@ -461,11 +511,12 @@ function killSnake(snake, currentFoods) {
   }
 
   if (snake.isPlayer) {
+    if(gameMode === 'online') socket.emit('player-died', { score: snake.score });
     setTimeout(() => showDeath(snake.score, snake.segs.length), 300);
   }
 }
 
-// ── Lógica de Simulación Unificada (Online y Bots) ───────────
+// ── Lógica de Simulación Unificada ───────────────────────────
 function updateGameLogic(mode, dt) {
   const data = mode === 'bots' ? bots : online;
   
@@ -481,22 +532,36 @@ function updateGameLogic(mode, dt) {
     const s = data.snakes[i];
     if (!s.alive) continue;
 
-    if (!s.isPlayer) updateBotAI(s, currentLeader, data.foods);
+    // Solo mover mediante IA local si estamos en modo bots autónomos
+    if (!s.isPlayer && mode === 'bots') updateBotAI(s, currentLeader, data.foods);
 
     if (s.boost && s.score > 5 && Math.random() < 0.12) s.score -= 1;
 
-    const speed = s.boost ? BOOST_SPEED : SNAKE_SPEED;
-    const head = s.segs[0];
-    const nx = head.x + Math.cos(s.angle) * speed * dt;
-    const ny = head.y + Math.sin(s.angle) * speed * dt;
+    // Los jugadores remotos en online ya traen su cálculo de segmentos procesado
+    if (s.isPlayer || mode === 'bots') {
+      const speed = s.boost ? BOOST_SPEED : SNAKE_SPEED;
+      const head = s.segs[0];
+      const nx = head.x + Math.cos(s.angle) * speed * dt;
+      const ny = head.y + Math.sin(s.angle) * speed * dt;
 
-    if (nx < 0 || nx > WORLD_W || ny < 0 || ny > WORLD_H) { killSnake(s, data.foods); continue; }
+      if (nx < 0 || nx > WORLD_W || ny < 0 || ny > WORLD_H) { killSnake(s, data.foods); continue; }
 
-    s.segs.unshift({ x: nx, y: ny });
-    while (s.segs.length > 10 + s.score * 0.3) s.segs.pop();
+      s.segs.unshift({ x: nx, y: ny });
+      while (s.segs.length > 10 + s.score * 0.3) s.segs.pop();
+    }
   }
 
-  // Colisión e Ingesta de comida veloz (Suma puntos interactivos)
+  // Enviar coordenadas de mi serpiente al servidor si estoy online
+  if(mode === 'online' && data.player.alive && Math.random() < 0.4) {
+    socket.emit('move', {
+      angle: data.player.angle,
+      boost: data.player.boost,
+      score: data.player.score,
+      segs: data.player.segs
+    });
+  }
+
+  // Colisión e Ingesta de comida fluida en ambos modos
   for (let i=0; i<data.snakes.length; i++) {
     const s = data.snakes[i];
     if (!s.alive) continue;
@@ -506,7 +571,7 @@ function updateGameLogic(mode, dt) {
     for (let j=0; j<data.foods.length; j++) {
       const f = data.foods[j];
       if (dist2(head.x, head.y, f.x, f.y) < (r + f.r)**2) {
-        s.score += f.value; // Suma +5, +10 o +17 puntos con total fluidez
+        s.score += f.value; // Suma puntos de comida (+5, +10 o +17) de forma fluida
 
         f.x = Math.random() * WORLD_W;
         f.y = Math.random() * WORLD_H;
@@ -518,11 +583,16 @@ function updateGameLogic(mode, dt) {
           f.value = 10;
           f.r = 7;
         }
+        
+        // Notificar al servidor que recolectamos comida en modo online
+        if(mode === 'online' && s.isPlayer) {
+          socket.emit('food-eaten', { index: j, newX: f.x, newY: f.y });
+        }
       }
     }
   }
 
-  // Verificación cruzada de colisiones por impacto mortal
+  // Verificación de impactos contra cuerpos
   for (let a=0; a<data.snakes.length; a++) {
     const sa = data.snakes[a]; if (!sa.alive) continue;
     const ha = sa.segs[0], ra = snakeRadius(sa.score);
@@ -541,17 +611,19 @@ function updateGameLogic(mode, dt) {
     }
   }
 
-  // Respawn constante de rivales eliminados
-  for (let i=1; i<data.snakes.length; i++) {
-    if (!data.snakes[i].alive) {
-      const bx = Math.random()*WORLD_W, by = Math.random()*WORLD_H;
-      data.snakes[i] = {
-        segs: [], name: (mode === 'bots' ? BOT_NAMES[Math.floor(Math.random()*BOT_NAMES.length)] + " [R]" : 'User_' + Math.floor(Math.random()*899 + 100)),
-        skin: SKIN_COLORS[Math.floor(Math.random()*SKIN_COLORS.length)], isPlayer: false,
-        angle: Math.random()*Math.PI*2, alive: true, score: Math.floor(Math.random()*20),
-        boost: false, aiTimer: 0
-      };
-      for (let j=0; j<10; j++) data.snakes[i].segs.push({x:bx-j*SEGMENT_GAP, y:by});
+  // Reposicionar bots automáticos solo si es modo offline
+  if (mode === 'bots') {
+    for (let i=1; i<data.snakes.length; i++) {
+      if (!data.snakes[i].alive) {
+        const bx = Math.random()*WORLD_W, by = Math.random()*WORLD_H;
+        data.snakes[i] = {
+          segs: [], name: BOT_NAMES[Math.floor(Math.random()*BOT_NAMES.length)] + " [R]",
+          skin: SKIN_COLORS[Math.floor(Math.random()*SKIN_COLORS.length)], isPlayer: false,
+          angle: Math.random()*Math.PI*2, alive: true, score: Math.floor(Math.random()*20),
+          boost: false, aiTimer: 0
+        };
+        for (let j=0; j<10; j++) data.snakes[i].segs.push({x:bx-j*SEGMENT_GAP, y:by});
+      }
     }
   }
 
@@ -752,6 +824,7 @@ function showDeath(score, length) {
 function goMenu() {
   gameActive = false; gameMode = null;
   if (animId) cancelAnimationFrame(animId);
+  if(socket.connected) socket.disconnect(); // Desconectar del servidor al salir
   canvas.style.display = 'none'; mmCvs.style.display = 'none';
   document.getElementById('hud').style.display = 'none';
   document.getElementById('death').style.display = 'none';
