@@ -368,7 +368,6 @@ function snakeRadius(score) { return BASE_RADIUS + Math.min(score/150, 12); }
 function spawnBotFood(n=1) {
   for (let i=0;i<n;i++) {
     const hue = Math.random()*360;
-    // Valores de puntos según tamaño aleatorio (Chica: 5, Mediana: 10, Grande: 17)
     const sizeType = Math.random();
     let r, value;
     if (sizeType < 0.6) {
@@ -401,6 +400,13 @@ function createBotSnake(x, y, skin, name, isPlayer) {
   };
 }
 
+// NUEVA FUNCIÓN OPTIMIZADA: Comprueba si un objeto entra en el visor de pantalla (Frustum Culling)
+function isInView(x, y, padding = 100) {
+  const c = cam();
+  return (x >= c.x - padding && x <= c.x + W + padding &&
+          y >= c.y - padding && y <= c.y + H + padding);
+}
+
 function initBots() {
   bots.foods = []; bots.snakes = [];
   spawnBotFood(FOOD_COUNT);
@@ -422,15 +428,13 @@ function updateBotAI(bot) {
   ai.turnTimer--;
   const margin = 200;
   
-  // Límites del mapa
   if (head.x<margin)        { lerpAngle(bot,0,TURN_SPEED*2); return; }
   if (head.x>WORLD_W-margin){ lerpAngle(bot,Math.PI,TURN_SPEED*2); return; }
   if (head.y<margin)        { lerpAngle(bot,Math.PI/2,TURN_SPEED*2); return; }
   if (head.y>WORLD_H-margin){ lerpAngle(bot,-Math.PI/2,TURN_SPEED*2); return; }
   
-  // AGRESIVIDAD: Buscar cabezas enemigas cercanas para encerrarlas (Todos contra todos)
   let targetEnemy = null;
-  let minEnemyDist = 180 * 180; // Rango de ataque/persecución
+  let minEnemyDist = 180 * 180;
   
   for (const other of bots.snakes) {
     if (other === bot || !other.alive) continue;
@@ -444,19 +448,16 @@ function updateBotAI(bot) {
   
   if (targetEnemy) {
     const oHead = targetEnemy.segs[0];
-    // Intentar cortar el paso de forma agresiva prediciendo su posición
     const interceptX = oHead.x + Math.cos(targetEnemy.angle) * 30;
     const interceptY = oHead.y + Math.sin(targetEnemy.angle) * 30;
     lerpAngle(bot, Math.atan2(interceptY - head.y, interceptX - head.x), TURN_SPEED * 1.5);
     
-    // Si están muy cerca y el bot es grande o competitivo, activa turbo aleatoriamente
     if (minEnemyDist < 100 * 100 && bot.score > 20 && Math.random() < 0.1) {
       bot.boost = true;
     }
     return;
   }
 
-  // Esquivar cuerpos (Prioridad máxima para sobrevivir al atacar)
   for (const other of bots.snakes) {
     if (other===bot||!other.alive) continue;
     for (let i=1; i<other.segs.length; i++) {
@@ -467,7 +468,6 @@ function updateBotAI(bot) {
     }
   }
   
-  // Cazar comida si no hay combate activo
   let nf=null, nd=Infinity;
   for (const f of bots.foods) {
     const d=dist2(head.x,head.y,f.x,f.y);
@@ -507,36 +507,32 @@ function killBotSnake(snake) {
 }
 
 function updateBots(dt) {
-  // Manejo del jugador local
   lerpAngle(bots.player, Math.atan2(mouseY-H/2, mouseX-W/2), TURN_SPEED*dt);
   bots.player.boost = boosting;
 
-  // Actualizar y mover todas las serpientes
   for (const s of bots.snakes) {
     if (!s.alive) continue;
     if (!s.isPlayer) updateBotAI(s);
     
-    // Controlar consumo de puntos y expulsión de bolitas por Turbo (Boost)
     const isUsingBoost = s.boost && s.score > 5;
     const speed = isUsingBoost ? BOOST_SPEED : SNAKE_SPEED;
     
     if (isUsingBoost) {
       s.boostTimer += dt;
-      if (s.boostTimer >= 4) { // Intervalo de gasto continuo de puntos
-        s.score = Math.max(0, s.score - 1.5); // Animación de bajar puntos reduciendo score de forma sutil
+      if (s.boostTimer >= 4) {
+        s.score = Math.max(0, s.score - 1.5);
         s.boostTimer = 0;
         
-        // Dejar bolita pequeña detrás de su cola
         const lastSeg = s.segs[s.segs.length - 1];
         if (lastSeg) {
           const hue = Math.random() * 360;
           bots.foods.push({
             x: lastSeg.x + (Math.random() - 0.5) * 10,
             y: lastSeg.y + (Math.random() - 0.5) * 10,
-            r: 3.5, // Bolitas más pequeñas
+            r: 3.5,
             color: s.skin.body,
             glow: s.skin.head,
-            value: 5, // Equivale a la comida básica baja
+            value: 5,
             pulse: 0,
             isPoop: true
           });
@@ -551,12 +547,10 @@ function updateBots(dt) {
     
     s.segs.unshift({x:nx,y:ny});
     
-    // Animación natural de encogimiento/crecimiento dinámico basada en score
     const targetLength = 10 + Math.floor(s.score * 0.5);
     while (s.segs.length > targetLength) s.segs.pop();
   }
 
-  // Colisiones con comida y puntos dinámicos
   for (const s of bots.snakes) {
     if (!s.alive) continue;
     const head=s.segs[0], r=snakeRadius(s.score);
@@ -571,7 +565,6 @@ function updateBots(dt) {
     }
   }
 
-  // Colisiones cabeza-cuerpo (Choques mortales)
   for (let a=0;a<bots.snakes.length;a++) {
     const sa=bots.snakes[a]; if(!sa.alive)continue;
     const ha=sa.segs[0], ra=snakeRadius(sa.score);
@@ -588,7 +581,6 @@ function updateBots(dt) {
     }
   }
 
-  // Revivir bots caídos automáticos
   for (let i=1;i<bots.snakes.length;i++) {
     if (!bots.snakes[i].alive) {
       const bx=Math.random()*WORLD_W, by=Math.random()*WORLD_H;
@@ -598,17 +590,14 @@ function updateBots(dt) {
     }
   }
 
-  // Efecto visual de pulsación en comida
   for (const f of bots.foods) f.pulse+=0.08;
 
-  // Seguimiento de cámara suave
   if (bots.player.alive) {
     const h=bots.player.segs[0];
     bots.cam.x += (h.x-W/2-bots.cam.x)*.12;
     bots.cam.y += (h.y-H/2-bots.cam.y)*.12;
   }
 
-  // Renderizar tabla de clasificación local
   const alive=bots.snakes.filter(s=>s.alive).sort((a,b)=>b.score-a.score);
   const lb=alive.slice(0,10).map(s=>({
     id:s.isPlayer?'__player__':s.name, name:s.name, score:Math.floor(s.score)
@@ -637,6 +626,11 @@ function drawHexGrid(camX, camY) {
 
 function drawSnakeObj(s, isMe, camX, camY) {
   const segs=s.segs; if (!segs||segs.length<2) return;
+  const head=segs[0];
+  
+  // OPTIMIZACIÓN FPS (Frustum Culling): Si la cabeza de la serpiente está muy lejos de la pantalla, no se dibuja.
+  if (!isInView(head.x, head.y, 250)) return;
+
   const skin=s.skin||SKIN_COLORS[0];
   const r=snakeRadius(s.score||0);
 
@@ -653,11 +647,9 @@ function drawSnakeObj(s, isMe, camX, camY) {
   }
   ctx.globalAlpha=1; ctx.shadowBlur=0;
 
-  const head=segs[0];
   ctx.beginPath(); ctx.arc(head.x,head.y,r*1.15,0,Math.PI*2);
   ctx.fillStyle=skin.head; ctx.fill();
 
-  // Ojos (¡Todos conservan cabeza y ojos en modo local!)
   const ang=s.angle||0, eo=r*.5, er=r*.32;
   [ang-.5,ang+.5].forEach(a=>{
     const ex=head.x+Math.cos(a)*eo, ey=head.y+Math.sin(a)*eo;
@@ -668,7 +660,6 @@ function drawSnakeObj(s, isMe, camX, camY) {
     ctx.fillStyle='#111'; ctx.fill();
   });
 
-  // Nombre visible
   ctx.font=`bold ${Math.max(10,r)}px Nunito`;
   ctx.textAlign='center';
   ctx.fillStyle=isMe?'#4ade80':'#fff';
@@ -680,12 +671,23 @@ function drawSnakeObj(s, isMe, camX, camY) {
 function drawFoodArr(foodArr) {
   const t=Date.now()/1000;
   for (const f of foodArr) {
-    const sx=f.x-cam().x, sy=f.y-cam().y;
-    if (sx<-20||sx>W+20||sy<-20||sy>H+20) continue;
+    // OPTIMIZACIÓN FPS (Frustum Culling): Solo dibuja las bolitas dentro del rango del visor.
+    if (!isInView(f.x, f.y, 30)) continue;
+    
     const pulse=1+Math.sin((f.pulse||t*3)+f.x*.01)*.15;
     ctx.shadowBlur=10; ctx.shadowColor=f.glow||f.color;
     ctx.beginPath(); ctx.arc(f.x,f.y,f.r*pulse,0,Math.PI*2);
     ctx.fillStyle=f.color; ctx.fill(); ctx.shadowBlur=0;
+
+    // ONLINE: Si el modo es online, dibuja de forma sutil los puntos flotantes sobre cada bolita
+    if (gameMode === 'online') {
+      ctx.font = 'bold 8px Nunito';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.textAlign = 'center';
+      // Calculamos un valor representativo estimado según el radio de la bolita del servidor
+      let estimatedVal = f.r > 7 ? 17 : (f.r > 5 ? 10 : 5);
+      ctx.fillText('+' + estimatedVal, f.x, f.y - (f.r * pulse) - 4);
+    }
   }
 }
 
@@ -728,7 +730,6 @@ function frame(ts) {
   ctx.save();
   ctx.translate(-c.x,-c.y);
 
-  // Bordes del mundo
   ctx.strokeStyle='rgba(255,80,80,.2)'; ctx.lineWidth=4;
   ctx.strokeRect(0,0,WORLD_W,WORLD_H);
 
@@ -739,7 +740,6 @@ function frame(ts) {
     if (bots.player.alive) drawSnakeObj(bots.player,true,c.x,c.y);
     drawMinimap(bots.snakes, bots.foods, null);
   } else {
-    // Código original intacto del online
     const me=online.snakes[online.myId];
     if (me?.segs?.length) {
       online.cam.x+=(me.segs[0].x-W/2-online.cam.x)*.12;
