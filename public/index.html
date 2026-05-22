@@ -25,7 +25,9 @@ body{
   letter-spacing:-2px;margin-bottom:4px;
   text-shadow:0 0 40px rgba(74,222,128,.5);
 }
-.logo .g{color:#4ade80}.logo .d{color:#a855f7}.logo .io{color:#a855f7}
+.logo .g{color:#4ade80}
+.logo .d{color:#a855f7}
+.logo .io{color:#a855f7}
 
 .snake-deco{margin-bottom:26px;animation:bob 2s ease-in-out infinite}
 @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
@@ -206,7 +208,8 @@ body{
 <div id="hud">
   <div id="mode-badge"></div>
   <div id="score-box">
-    <div>Longitud: <span id="len-val">10</span></div>
+    <!-- Aquí agregamos el ID animated-len para manejar la animación del marcador por separado -->
+    <div>Longitud: <span id="len-val">10</span> (Puntos: <span id="animated-len">0</span>)</div>
     <div>Rango: <span id="rank-val">-</span> / <span id="total-val">-</span></div>
   </div>
   <div id="leaderboard">
@@ -279,6 +282,9 @@ let gameActive = false;
 let selectedSkin = 0;
 let mouseX = 0, mouseY = 0, boosting = false;
 let animId = null;
+
+// [NUEVO] Variable para controlar el valor visual animado del score actual
+let visualScore = 0;
 
 // ── Socket ────────────────────────────────────────────────
 const socket = io({ autoConnect: true });
@@ -365,14 +371,31 @@ function lerpAngle(snake, target, speed) {
 }
 function snakeRadius(score) { return BASE_RADIUS + Math.min(score/150, 12); }
 
+// [MODIFICADO] Lógica de spawn con las puntuaciones y tamaños que pediste
 function spawnBotFood(n=1) {
   for (let i=0;i<n;i++) {
     const hue = Math.random()*360;
+    
+    // Decidimos el tamaño aleatoriamente
+    const rand = Math.random();
+    let radius, scoreValue;
+    
+    if (rand < 0.33) {
+      radius = 8.5 + Math.random()*2; // Grandes
+      scoreValue = 7;
+    } else if (rand < 0.66) {
+      radius = 6 + Math.random()*1.5; // Medianas
+      scoreValue = 8;
+    } else {
+      radius = 3.5 + Math.random()*1.5; // Pequeñas
+      scoreValue = 5;
+    }
+
     bots.foods.push({
       x: Math.random()*WORLD_W, y: Math.random()*WORLD_H,
-      r: 4+Math.random()*5,
+      r: radius,
       color:`hsl(${hue},100%,60%)`, glow:`hsl(${hue},100%,80%)`,
-      value:1, pulse: Math.random()*Math.PI*2,
+      value: scoreValue, pulse: Math.random()*Math.PI*2,
     });
   }
 }
@@ -390,6 +413,7 @@ function createBotSnake(x, y, skin, name, isPlayer) {
 
 function initBots() {
   bots.foods = []; bots.snakes = [];
+  visualScore = 0; // Reiniciamos el marcador animado
   spawnBotFood(FOOD_COUNT);
   const px = WORLD_W/2 + (Math.random()-.5)*400;
   const py = WORLD_H/2 + (Math.random()-.5)*400;
@@ -436,15 +460,20 @@ function updateBotAI(bot) {
   bot.boost = false;
 }
 
+// [MODIFICADO] Al morir un bot, genera bolitas medianas (8 pts) o grandes (7 pts) en su rastro
 function killBotSnake(snake) {
   snake.alive = false;
   for (const seg of snake.segs) {
     if (Math.random()<.25) {
       const hue=Math.random()*360;
+      const isBig = Math.random() > 0.5;
       bots.foods.push({
         x:seg.x+(Math.random()-.5)*20, y:seg.y+(Math.random()-.5)*20,
-        r:5+Math.random()*8, color:`hsl(${hue},100%,60%)`,
-        glow:`hsl(${hue},100%,80%)`, value:2, pulse:0,
+        r: isBig ? 9 : 7, 
+        color:`hsl(${hue},100%,60%)`,
+        glow:`hsl(${hue},100%,80%)`, 
+        value: isBig ? 7 : 8, 
+        pulse:0,
       });
     }
   }
@@ -528,6 +557,14 @@ function updateBots(dt) {
   }));
   updateLB(lb,'__player__',alive.length);
   document.getElementById('len-val').textContent=bots.player.segs.length;
+
+  // [NUEVO] Animación fluida tipo odómetro para el marcador de puntos del HUD
+  if (visualScore < bots.player.score) {
+    // Sube gradualmente de acuerdo a la distancia del score real
+    visualScore += Math.ceil((bots.player.score - visualScore) * 0.08);
+    if (visualScore > bots.player.score) visualScore = bots.player.score;
+  }
+  document.getElementById('animated-len').textContent = visualScore;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -665,6 +702,15 @@ function frame(ts) {
     for (const s of snakeArr) if (s.id!==online.myId) drawSnakeObj(s,false,c.x,c.y);
     if (me?.segs) drawSnakeObj(me,true,c.x,c.y);
     drawMinimap(snakeArr.map(s=>({...s,segs:s.segs})), online.foods, online.myId);
+    
+    // [NUEVO] Soporte de animación de score también para el Modo Online
+    if (me) {
+      if (visualScore < me.score) {
+        visualScore += Math.ceil((me.score - visualScore) * 0.08);
+        if (visualScore > me.score) visualScore = me.score;
+      }
+      document.getElementById('animated-len').textContent = visualScore;
+    }
   }
 
   ctx.restore();
@@ -729,6 +775,7 @@ document.getElementById('btn-online').addEventListener('click', ()=>{
   const name=document.getElementById('nickname').value.trim()||'Jugador';
   document.getElementById('online-status').textContent='Entrando…';
   document.getElementById('online-status').className='connecting';
+  visualScore = 0; // Reinicio en online
   socket.emit('join',{name,skinIdx:selectedSkin});
 });
 
@@ -741,6 +788,7 @@ document.getElementById('btn-respawn').addEventListener('click', ()=>{
     document.getElementById('death').style.display='none';
     document.getElementById('hud').style.display='block';
     gameActive=true;
+    visualScore = 0; // Reinicio al revivir
     lastTime=performance.now();
     animId=requestAnimationFrame(frame);
   }
