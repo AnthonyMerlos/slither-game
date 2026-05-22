@@ -157,7 +157,6 @@ body{
 </head>
 <body>
 
-<!-- ════════════ MENU ════════════ -->
 <div id="menu">
   <div class="logo">
     <span class="g">slither</span><span class="d">.</span><span class="io">io</span>
@@ -191,7 +190,6 @@ body{
 <canvas id="gameCanvas"></canvas>
 <canvas id="minimap"></canvas>
 
-<!-- ════════════ HUD ════════════ -->
 <div id="hud">
   <div id="mode-badge"></div>
   <div id="score-box">
@@ -205,7 +203,6 @@ body{
   <div id="boost-tip">Clic izquierdo / Espacio = Boost ⚡</div>
 </div>
 
-<!-- ════════════ DEATH ════════════ -->
 <div id="death">
   <h2>💀 ¡Eliminado!</h2>
   <div class="stats" id="death-stats"></div>
@@ -216,13 +213,9 @@ body{
 </div>
 
 <script>
-// ============================================================
-//  SLITHER.IO — ULTRA FLUIDO CON IA COMPETITIVA (TODOS VS TODOS)
-// ============================================================
-
 const WORLD_W     = 4000, WORLD_H = 4000;
 const FOOD_COUNT  = 650;
-const BOT_COUNT   = 24; // Más bots para potenciar el PVP local
+const BOT_COUNT   = 24; 
 const SNAKE_SPEED = 3.0;
 const BOOST_SPEED = 5.6;
 const TURN_SPEED  = 0.08;
@@ -253,6 +246,9 @@ const mmCvs  = document.getElementById('minimap');
 const mmCtx  = mmCvs.getContext('2d');
 let W, H;
 
+// Objeto global de la cámara compartida
+const globalCam = { x: 0, y: 0 };
+
 function resize() {
   W = canvas.width  = window.innerWidth;
   H = canvas.height = window.innerHeight;
@@ -270,7 +266,7 @@ let visualScore = 0;
 let leaderboardData = [];
 let currentLeaderId = null;
 
-// ── Socket.io Connection ──────────────────────────────────
+// ── Socket.io ──────────────────────────────────
 const socket = io({ autoConnect: true });
 
 socket.on('connect', () => {
@@ -284,6 +280,13 @@ socket.on('init', (data) => {
   online.snakes = data.snakes;
   online.foods  = data.foods;
   visualScore   = 0;
+  
+  // Posicionamiento inmediato inicial de la cámara online
+  const me = online.snakes[data.id];
+  if(me && me.segs && me.segs.length > 0) {
+    globalCam.x = me.segs[0].x - W / 2;
+    globalCam.y = me.segs[0].y - H / 2;
+  }
   showGame('online');
 });
 
@@ -295,7 +298,7 @@ socket.on('state', (data) => {
     online.foods = online.foods.filter(f => !eaten.has(f.id));
   }
   leaderboardData = data.lb;
-  if(lb.length > 0) currentLeaderId = lb[0].id;
+  if(data.lb.length > 0) currentLeaderId = data.lb[0].id;
   updateLB(data.lb, online.myId, Object.keys(online.snakes).length);
   const me = online.snakes[online.myId];
   if (me) document.getElementById('len-val').textContent = me.segs?.length || '-';
@@ -312,12 +315,12 @@ setInterval(() => {
   socket.emit('input', { angle, boost: boosting });
 }, 30);
 
-const online = { myId: null, snakes: {}, foods: [], cam: { x: 0, y: 0 } };
+const online = { myId: null, snakes: {}, foods: [] };
 
 // ════════════════════════════════════════════════════════════
-//  LOCAL BOTS PVP MODE (SISTEMA TOTALMENTE AGRESIVO)
+//  LOCAL BOTS PVP MODE
 // ════════════════════════════════════════════════════════════
-const bots = { foods: [], snakes: [], player: null, cam: { x: 0, y: 0 } };
+const bots = { foods: [], snakes: [], player: null };
 
 function dist2(ax, ay, bx, by) {
   const dx = ax-bx, dy = ay-by; return dx*dx+dy*dy;
@@ -377,10 +380,12 @@ function initBots() {
     const name = BOT_NAMES[i % BOT_NAMES.length] + ' #' + Math.floor(Math.random()*90+10);
     bots.snakes.push(createBotSnake('bot_'+i, bx, by, SKIN_COLORS[i % SKIN_COLORS.length], name, false));
   }
-  bots.cam.x = px-W/2; bots.cam.y = py-H/2;
+  
+  // Posicionar inmediatamente la cámara en la cabeza del jugador al nacer
+  globalCam.x = px - W / 2;
+  globalCam.y = py - H / 2;
 }
 
-// ── Inteligencia Artificial Mejorada (Combate Directo) ──
 function processBotAI(bot) {
   if (bot.isPlayer || !bot.alive) return;
   const head = bot.segs[0];
@@ -388,14 +393,12 @@ function processBotAI(bot) {
   
   bot.aiTimer--;
 
-  // 1. Prioridad Absoluta: Salirse de los bordes del mapa
   const margin = 180;
   if (head.x < margin) { lerpAngle(bot, 0, TURN_SPEED*2.5); return; }
   if (head.x > WORLD_W - margin) { lerpAngle(bot, Math.PI, TURN_SPEED*2.5); return; }
   if (head.y < margin) { lerpAngle(bot, Math.PI/2, TURN_SPEED*2.5); return; }
   if (head.y > WORLD_H - margin) { lerpAngle(bot, -Math.PI/2, TURN_SPEED*2.5); return; }
 
-  // 2. Escaneo de Entorno (Encontrar amenazas y presas cercanas)
   let closestEnemy = null;
   let minDistEnemy = Infinity;
   let dangerZone = false;
@@ -406,15 +409,13 @@ function processBotAI(bot) {
     const oHead = other.segs[0];
     const d2 = dist2(head.x, head.y, oHead.x, oHead.y);
 
-    // Guardar enemigo más cercano en un rango de combate de 400px
     if (d2 < 400*400 && d2 < minDistEnemy) {
       minDistEnemy = d2;
       closestEnemy = other;
     }
 
-    // Esquivar el cuerpo de CUALQUIER serpiente (Evitar morir)
     const rOther = snakeRadius(other.score);
-    const checkSegments = Math.min(other.segs.length, 35); // Optimizar escaneo
+    const checkSegments = Math.min(other.segs.length, 35);
     for (let i = 0; i < checkSegments; i++) {
       const seg = other.segs[i];
       const sDist2 = dist2(head.x, head.y, seg.x, seg.y);
@@ -422,7 +423,6 @@ function processBotAI(bot) {
       
       if (sDist2 < safeDist * safeDist) {
         dangerZone = true;
-        // Ángulo opuesto para evadir el impacto de frente
         dangerAngle = Math.atan2(head.y - seg.y, head.x - seg.x);
         break;
       }
@@ -430,47 +430,38 @@ function processBotAI(bot) {
     if (dangerZone) break;
   }
 
-  // 3. Máquina de Estados de Combate (Todos contra Todos)
   if (dangerZone) {
     bot.aiState = 'evade';
-    lerpAngle(bot, dangerAngle, TURN_SPEED * 3.0); // Giro ultra rápido de emergencia
-    bot.boost = true; // Activa turbo para escapar del cierre de camino
+    lerpAngle(bot, dangerAngle, TURN_SPEED * 3.0);
+    bot.boost = true;
     return;
   }
 
-  // Si hay un enemigo cerca, decidir si Atacar, Huir o cooperar contra el primero
   if (closestEnemy) {
     const enemyHead = closestEnemy.segs[0];
     const angleToEnemy = Math.atan2(enemyHead.y - head.y, enemyHead.x - head.x);
-    
-    // Condición Especial: Si el enemigo detectado es el Líder del servidor, van por él juntos
     const isTargetLeader = (closestEnemy.id === currentLeaderId);
 
     if (isTargetLeader && bot.score > 100) {
       bot.aiState = 'hunt_leader';
-      // Intenta interceptar un poco más adelante de la trayectoria del líder (Predicción básica)
       const interceptX = enemyHead.x + Math.cos(closestEnemy.angle) * 60;
       const interceptY = enemyHead.y + Math.sin(closestEnemy.angle) * 60;
       lerpAngle(bot, Math.atan2(interceptY - head.y, interceptX - head.x), TURN_SPEED * 1.5);
-      bot.boost = (minDistEnemy < 200*200); // Usa boost si está a tiro de corte
+      bot.boost = (minDistEnemy < 200*200);
     }
-    // Ataque estándar si soy más grande o igual en tamaño (Todos contra Todos)
     else if (bot.score >= closestEnemy.score) {
       bot.aiState = 'attack';
-      // IA Ofensiva: Moverse hacia adelante de su cabeza para forzar colisión
       const attackX = enemyHead.x + Math.cos(closestEnemy.angle) * 45;
       const attackY = enemyHead.y + Math.sin(closestEnemy.angle) * 45;
       lerpAngle(bot, Math.atan2(attackY - head.y, attackX - head.x), TURN_SPEED * 1.3);
       bot.boost = (minDistEnemy < 150*150 && Math.random() < 0.7);
     } 
-    // Si soy inferior, retroceder tácticamente
     else {
       bot.aiState = 'retreat';
       lerpAngle(bot, angleToEnemy + Math.PI + (Math.random() - 0.5), TURN_SPEED * 1.1);
       bot.boost = false;
     }
   } 
-  // 4. Si no hay peligro ni peleas cerca, recolectar comida eficientemente
   else {
     bot.boost = false;
     if (bot.aiTimer <= 0) {
@@ -478,7 +469,6 @@ function processBotAI(bot) {
       let bestFood = null;
       let minFoodD2 = Infinity;
       
-      // Buscar comida cercana en rango
       for (const f of bots.foods) {
         const d2 = dist2(head.x, head.y, f.x, f.y);
         if (d2 < minFoodD2) { minFoodD2 = d2; bestFood = f; }
@@ -486,7 +476,7 @@ function processBotAI(bot) {
       
       if (bestFood && minFoodD2 < 350*350) {
         bot.targetAngle = Math.atan2(bestFood.y - head.y, bestFood.x - head.x);
-        bot.aiTimer = 25; // Mantener enfoque un momento corto
+        bot.aiTimer = 25;
       } else {
         bot.targetAngle = bot.angle + (Math.random() - 0.5) * 2.0;
         bot.aiTimer = Math.floor(Math.random()*40 + 30);
@@ -498,7 +488,6 @@ function processBotAI(bot) {
 
 function killBotSnake(snake) {
   snake.alive = false;
-  // Convertir el cuerpo en bolitas brillantes de alto valor
   for (let i = 0; i < snake.segs.length; i += 2) {
     const seg = snake.segs[i];
     const hue = Math.random()*360;
@@ -516,14 +505,12 @@ function killBotSnake(snake) {
 }
 
 function updateBotsLoop(dt) {
-  // Manejo fluido de entrada del jugador local
   if (bots.player.alive) {
     const targetAngle = Math.atan2(mouseY - H/2, mouseX - W/2);
     lerpAngle(bots.player, targetAngle, TURN_SPEED * dt);
     bots.player.boost = boosting;
   }
 
-  // Procesar IAs y Desplazamientos
   for (const s of bots.snakes) {
     if (!s.alive) continue;
     if (!s.isPlayer) processBotAI(s);
@@ -531,7 +518,6 @@ function updateBotsLoop(dt) {
     const currentSpeed = s.boost ? BOOST_SPEED : SNAKE_SPEED;
     const head = s.segs[0];
     
-    // Movimiento basado en delta para mitigar caídas de frames
     const nextX = head.x + Math.cos(s.angle) * currentSpeed * dt;
     const nextY = head.y + Math.sin(s.angle) * currentSpeed * dt;
 
@@ -539,20 +525,16 @@ function updateBotsLoop(dt) {
       killBotSnake(s); continue;
     }
 
-    // Adelantar cabeza de la cadena de segmentos
     s.segs.unshift({ x: nextX, y: nextY });
 
-    // Consumo constante de masa por uso de turbo acelerador
     if (s.boost && s.score > 2 && Math.random() < 0.12) {
       s.score -= 1;
     }
 
-    // Mantener proporción exacta del tamaño / largo
     const targetLength = Math.floor(12 + s.score * 0.4);
     while (s.segs.length > targetLength) s.segs.pop();
   }
 
-  // Detección e interacción de alimentación
   for (const s of bots.snakes) {
     if (!s.alive) continue;
     const head = s.segs[0];
@@ -568,7 +550,6 @@ function updateBotsLoop(dt) {
     }
   }
 
-  // Detección Cruzada de Colisiones Frontales (PVP Puro)
   for (let a = 0; a < bots.snakes.length; a++) {
     const sa = bots.snakes[a]; if (!sa.alive) continue;
     const hA = sa.segs[0];
@@ -579,7 +560,6 @@ function updateBotsLoop(dt) {
       const sb = bots.snakes[b]; if (!sb.alive) continue;
       const rB = snakeRadius(sb.score);
 
-      // Comprobar si la cabeza del bot A choca contra los segmentos corporales del bot B
       for (let i = 1; i < sb.segs.length; i++) {
         if (dist2(hA.x, hA.y, sb.segs[i].x, sb.segs[i].y) < (rA + rB * 0.85)**2) {
           killBotSnake(sa);
@@ -590,7 +570,6 @@ function updateBotsLoop(dt) {
     }
   }
 
-  // Revivir bots eliminados dinámicamente para mantener el lobby lleno
   for (let i = 1; i < bots.snakes.length; i++) {
     if (!bots.snakes[i].alive) {
       const rx = Math.random()*(WORLD_W-400)+200;
@@ -601,7 +580,6 @@ function updateBotsLoop(dt) {
     }
   }
 
-  // Renderizar la tabla clasificatoria local
   const sortedActive = bots.snakes.filter(s => s.alive).sort((a,b) => b.score - a.score);
   if (sortedActive.length > 0) currentLeaderId = sortedActive[0].id;
 
@@ -612,7 +590,6 @@ function updateBotsLoop(dt) {
   updateLB(lbMapped, '__player__', sortedActive.length);
   document.getElementById('len-val').textContent = bots.player.segs.length;
 
-  // ── Interpolación Lineal para marcador hiperfluido (60FPS+) ──
   if (visualScore < bots.player.score) {
     const diff = bots.player.score - visualScore;
     visualScore += Math.max(1, Math.ceil(diff * 0.12 * dt));
@@ -624,7 +601,7 @@ function updateBotsLoop(dt) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  RENDER MOTOR GRÁFICO COMPARTIDO (MÁXIMA FLUIDEZ)
+//  MOTOR GRÁFICO SUAVIZADO
 // ════════════════════════════════════════════════════════════
 function drawHexGrid(camX, camY) {
   const sz = 32, hW = sz * Math.sqrt(3), hH = sz * 2;
@@ -653,12 +630,10 @@ function drawSnakeObj(s, isMe, camX, camY) {
   const rad = snakeRadius(s.score || 0);
 
   ctx.save();
-  // Efecto visual de estela luminosa al usar aceleración
   ctx.shadowBlur = s.boost ? 16 : 0; 
   ctx.shadowColor = skin.head;
   ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = rad * 2;
 
-  // Dibujar cuerpo segmentado en orden inverso
   for (let i = segs.length - 1; i > 0; i--) {
     const pct = i / segs.length;
     ctx.beginPath();
@@ -670,12 +645,10 @@ function drawSnakeObj(s, isMe, camX, camY) {
   }
   ctx.restore();
 
-  // Cabeza principal
   const head = segs[0];
   ctx.beginPath(); ctx.arc(head.x, head.y, rad * 1.12, 0, Math.PI * 2);
   ctx.fillStyle = skin.head; ctx.fill();
 
-  // Ojos direccionales realistas
   const ang = s.angle || 0, eOffset = rad * 0.48, eRadius = rad * 0.30;
   [ang - 0.45, ang + 0.45].forEach(a => {
     const ex = head.x + Math.cos(a) * eOffset;
@@ -687,7 +660,6 @@ function drawSnakeObj(s, isMe, camX, camY) {
     ctx.fillStyle = '#111116'; ctx.fill();
   });
 
-  // Texto del nombre de jugador o bot
   ctx.font = `bold ${Math.max(11, rad * 0.95)}px Nunito`;
   ctx.textAlign = 'center';
   ctx.fillStyle = isMe ? '#4ade80' : '#e2e8f0';
@@ -700,8 +672,7 @@ function drawFoodArr(foodArr) {
   const pulseTime = Date.now() / 900;
   ctx.save();
   for (const f of foodArr) {
-    const cX = cam().x, cY = cam().y;
-    if (f.x - cX < -30 || f.x - cX > W + 30 || f.y - cY < -30 || f.y - cY > H + 30) continue;
+    if (f.x - globalCam.x < -30 || f.x - globalCam.x > W + 30 || f.y - globalCam.y < -30 || f.y - globalCam.y > H + 30) continue;
     
     const pulseFactor = 1.0 + Math.sin(pulseTime + f.x * 0.02) * 0.12;
     ctx.shadowBlur = 8; ctx.shadowColor = f.glow || f.color;
@@ -711,22 +682,18 @@ function drawFoodArr(foodArr) {
   ctx.restore();
 }
 
-function cam() { return gameMode === 'bots' ? bots.cam : online.cam; }
-
 function drawMinimap(snakeList, foodArr, myIdOrPlayer) {
   const mSize = 120;
   mmCtx.fillStyle = 'rgba(8, 11, 22, 0.88)';
   mmCtx.fillRect(0, 0, mSize, mSize);
   const scaleX = mSize / WORLD_W, scaleY = mSize / WORLD_H;
 
-  // Alimentos en minimapa
   for (let i = 0; i < foodArr.length; i += 2) {
     const f = foodArr[i];
     mmCtx.fillStyle = 'rgba(255,255,255,0.2)';
     mmCtx.fillRect(f.x * scaleX, f.y * scaleY, 1, 1);
   }
 
-  // Jugadores en minimapa
   for (const s of snakeList) {
     if (!s || !s.segs || s.segs.length === 0 || !s.alive) continue;
     const h = s.segs[0];
@@ -735,51 +702,64 @@ function drawMinimap(snakeList, foodArr, myIdOrPlayer) {
     mmCtx.beginPath(); mmCtx.arc(h.x * scaleX, h.y * scaleY, isMe ? 3.2 : 1.8, 0, Math.PI * 2); mmCtx.fill();
   }
 
-  const c = cam();
   mmCtx.strokeStyle = 'rgba(255,255,255,0.25)'; mmCtx.lineWidth = 1;
-  mmCtx.strokeRect(c.x * scaleX, c.y * scaleY, W * scaleX, H * scaleY);
+  mmCtx.strokeRect(globalCam.x * scaleX, globalCam.y * scaleY, W * scaleX, H * scaleY);
 }
 
-// ── Bucle Principal de Renderizado Fluido ──
 let lastTimestamp = 0;
 
 function frame(timestamp) {
   if (!lastTimestamp) lastTimestamp = timestamp;
-  // Factor delta basado en frames ideales de 60Hz (16.67ms)
   const dt = Math.min((timestamp - lastTimestamp) / 16.67, 3.5);
   lastTimestamp = timestamp;
 
   ctx.clearRect(0, 0, W, H);
-  const camera = cam();
-  drawHexGrid(camera.x, camera.y);
 
-  ctx.save();
-  ctx.translate(-camera.x, -camera.y);
-
-  // Bordes del espacio de juego
-  ctx.strokeStyle = 'rgba(248, 113, 113, 0.3)'; ctx.lineWidth = 6;
-  ctx.strokeRect(0, 0, WORLD_W, WORLD_H);
-
+  // ── CONTROL DINÁMICO DE LA CÁMARA LOCAL (FIJADA EN EL JUGADOR) ──
   if (gameMode === 'bots') {
     updateBotsLoop(dt);
+    if (bots.player && bots.player.alive && bots.player.segs.length > 0) {
+      // Interpola la posición de la cámara hacia la cabeza de tu serpiente local
+      globalCam.x += (bots.player.segs[0].x - W / 2 - globalCam.x) * 0.15 * dt;
+      globalCam.y += (bots.player.segs[0].y - H / 2 - globalCam.y) * 0.15 * dt;
+    }
+    
+    drawHexGrid(globalCam.x, globalCam.y);
+    ctx.save();
+    ctx.translate(-globalCam.x, -globalCam.y);
+
+    ctx.strokeStyle = 'rgba(248, 113, 113, 0.3)'; ctx.lineWidth = 6;
+    ctx.strokeRect(0, 0, WORLD_W, WORLD_H);
+
     drawFoodArr(bots.foods);
-    // Renderizar ordenado por tamaño para capas correctas
     const renderOrder = [...bots.snakes].sort((a,b)=>a.score - b.score);
     for (const s of renderOrder) {
-      if (s.alive) drawSnakeObj(s, s.isPlayer, camera.x, camera.y);
+      if (s.alive) drawSnakeObj(s, s.isPlayer, globalCam.x, globalCam.y);
     }
     drawMinimap(bots.snakes, bots.foods, null);
-  } else {
-    // Sincronización suavizada del modo online
+  } 
+  else {
+    // Modo Multijugador en Red (Online)
     const me = online.snakes[online.myId];
-    if (me?.segs?.length) {
-      online.cam.x += (me.segs[0].x - W/2 - online.cam.x) * 0.15 * dt;
-      online.cam.y += (me.segs[0].y - H/2 - online.cam.y) * 0.15 * dt;
+    if (me && me.alive && me.segs && me.segs.length > 0) {
+      // Interpola la posición de la cámara hacia la cabeza de tu serpiente de red
+      globalCam.x += (me.segs[0].x - W / 2 - globalCam.x) * 0.15 * dt;
+      globalCam.y += (me.segs[0].y - H / 2 - globalCam.y) * 0.15 * dt;
     }
+    
+    drawHexGrid(globalCam.x, globalCam.y);
+    ctx.save();
+    ctx.translate(-globalCam.x, -globalCam.y);
+
+    ctx.strokeStyle = 'rgba(248, 113, 113, 0.3)'; ctx.lineWidth = 6;
+    ctx.strokeRect(0, 0, WORLD_W, WORLD_H);
+
     drawFoodArr(online.foods);
     const snakeArr = Object.values(online.snakes);
-    for (const s of snakeArr) if (s.id !== online.myId && s.alive) drawSnakeObj(s, false, camera.x, camera.y);
-    if (me && me.alive) drawSnakeObj(me, true, camera.x, camera.y);
+    for (const s of snakeArr) {
+      if (s.id !== online.myId && s.alive) drawSnakeObj(s, false, globalCam.x, globalCam.y);
+    }
+    if (me && me.alive) drawSnakeObj(me, true, globalCam.x, globalCam.y);
     drawMinimap(snakeArr, online.foods, online.myId);
     
     if (me) {
@@ -842,7 +822,6 @@ function goMenu() {
   document.getElementById('menu').style.display = 'flex';
 }
 
-// ── Event Listener Triggers ───────────────────────────────
 document.getElementById('btn-bots').addEventListener('click', () => { initBots(); showGame('bots'); });
 document.getElementById('btn-online').addEventListener('click', () => {
   const name = document.getElementById('nickname').value.trim() || 'Jugador';
@@ -868,7 +847,6 @@ canvas.addEventListener('mouseup', e => { if(e.button === 0) boosting = false; }
 window.addEventListener('keydown', e => { if(e.code === 'Space') { e.preventDefault(); boosting = true; } });
 window.addEventListener('keyup', e => { if(e.code === 'Space') boosting = false; });
 
-// ── Construcción de la Paleta de Aspectos ──────────────────
 const picker = document.getElementById('skin-picker');
 SKIN_COLORS.forEach((skin, i) => {
   const btn = document.createElement('div');
