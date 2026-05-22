@@ -1,863 +1,504 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Slither.io - Servidor Local</title>
-<script src="/socket.io/socket.io.js"></script>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap');
-*{margin:0;padding:0;box-sizing:border-box}
-body{
-  background:#1a1a2e;font-family:'Nunito',sans-serif;
-  color:#e2e8f0;overflow:hidden;width:100vw;height:100vh;user-select:none;
-}
-
-/* ════════════ MENU ════════════ */
-#menu{
-  position:fixed;inset:0;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  background:radial-gradient(ellipse at 50% 40%,#0f3460 0%,#080818 70%);
-  z-index:100;
-}
-.logo{
-  font-size:clamp(3rem,8vw,6rem);font-weight:900;
-  letter-spacing:-2px;margin-bottom:4px;
-  text-shadow:0 0 40px rgba(74,222,128,.5);
-}
-.logo .g{color:#4ade80}
-.logo .d{color:#a855f7}
-.logo .io{color:#a855f7}
-
-.snake-deco{margin-bottom:26px;animation:bob 2s ease-in-out infinite}
-@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
-
-#nickname{
-  background:rgba(255,255,255,.08);border:2px solid rgba(74,222,128,.3);
-  border-radius:30px;padding:14px 28px;color:#fff;
-  font-size:1.2rem;font-family:'Nunito',sans-serif;
-  width:300px;text-align:center;outline:none;
-  transition:border-color .3s;margin-bottom:22px;
-}
-#nickname:focus{border-color:#4ade80}
-#nickname::placeholder{color:rgba(255,255,255,.3)}
-
-.mode-wrap{display:flex;gap:16px;margin-bottom:26px}
-.mode-btn{
-  display:flex;flex-direction:column;align-items:center;
-  padding:18px 32px;border:none;border-radius:16px;
-  font-family:'Nunito',sans-serif;cursor:pointer;
-  transition:transform .15s,box-shadow .2s;
-  min-width:140px;
-}
-.mode-btn .icon{font-size:2rem;margin-bottom:6px}
-.mode-btn .label{font-size:1.1rem;font-weight:900}
-.mode-btn .sub{font-size:.75rem;opacity:.75;margin-top:2px}
-.mode-btn:hover{transform:translateY(-4px)}
-.mode-btn:active{transform:scale(.96)}
-
-#btn-bots{
-  background:linear-gradient(135deg,#22c55e,#16a34a);
-  color:#fff;box-shadow:0 0 22px rgba(34,197,94,.4);
-}
-#btn-bots:hover{box-shadow:0 0 36px rgba(34,197,94,.7)}
-
-#btn-online{
-  background:linear-gradient(135deg,#a855f7,#6d28d9);
-  color:#fff;box-shadow:0 0 22px rgba(168,85,247,.4);
-}
-#btn-online:hover{box-shadow:0 0 36px rgba(168,85,247,.7)}
-
-.skin-label{font-size:.85rem;opacity:.55;margin-bottom:8px}
-.skin-row{display:flex;gap:10px}
-.skin-btn{
-  width:40px;height:40px;border-radius:50%;cursor:pointer;
-  border:3px solid transparent;transition:border-color .2s,transform .2s;
-}
-.skin-btn:hover,.skin-btn.active{border-color:#fff;transform:scale(1.18)}
-
-#online-status{
-  margin-top:16px;font-size:.85rem;
-  color:rgba(255,255,255,.4);min-height:20px;
-}
-#online-status.connected{color:#4ade80}
-
-/* ════════════ CANVAS ════════════ */
-#gameCanvas{position:fixed;inset:0;display:none;cursor:none}
-#minimap{
-  position:fixed;bottom:10px;right:10px;
-  width:120px;height:120px;border-radius:8px;
-  border:2px solid rgba(255,255,255,.2);display:none;
-}
-
-/* ════════════ HUD ════════════ */
-#hud{position:fixed;inset:0;pointer-events:none;display:none;z-index:10}
-#score-box{
-  position:absolute;bottom:14px;left:14px;
-  font-size:1rem;color:rgba(255,255,255,.85);
-  text-shadow:1px 1px 4px #000;line-height:1.6;
-}
-#mode-badge{
-  position:absolute;top:10px;left:10px;
-  padding:4px 12px;border-radius:20px;font-size:.8rem;font-weight:700;
-}
-#mode-badge.bots{background:rgba(34,197,94,.25);color:#4ade80;border:1px solid rgba(34,197,94,.4)}
-#mode-badge.online{background:rgba(168,85,247,.25);color:#c084fc;border:1px solid rgba(168,85,247,.4)}
-
-#leaderboard{
-  position:absolute;top:10px;right:10px;
-  background:rgba(0,0,0,.5);border-radius:10px;
-  padding:10px 14px;min-width:215px;font-size:.85rem;
-  backdrop-filter:blur(4px);
-}
-#leaderboard h3{
-  text-align:center;font-size:1rem;margin-bottom:8px;
-  color:#fff;letter-spacing:1px;
-}
-.lb-row{display:flex;gap:6px;margin-bottom:4px;align-items:center}
-.lb-rank{color:#a78bfa;font-weight:700;width:26px}
-.lb-name{flex:1;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lb-score{color:#facc15;font-weight:700}
-.lb-row.me .lb-name{color:#4ade80;font-weight:900}
-.lb-row.me .lb-score{color:#4ade80}
-
-#boost-tip{
-  position:absolute;bottom:14px;left:50%;
-  transform:translateX(-50%);
-  color:rgba(255,255,255,.35);font-size:.8rem;
-}
-
-/* ════════════ DEATH ════════════ */
-#death{
-  position:fixed;inset:0;background:rgba(0,0,0,.78);
-  display:none;flex-direction:column;
-  align-items:center;justify-content:center;z-index:200;
-}
-#death h2{
-  font-size:3.2rem;font-weight:900;color:#f87171;
-  margin-bottom:10px;
-}
-#death .stats{font-size:1.2rem;color:#e2e8f0;margin-bottom:30px;text-align:center}
-.death-btns{display:flex;gap:14px}
-.death-btn{
-  padding:14px 34px;border:none;border-radius:30px;
-  font-family:'Nunito',sans-serif;font-size:1.1rem;font-weight:900;
-  cursor:pointer;transition:transform .15s;
-}
-#btn-respawn{
-  background:linear-gradient(135deg,#4ade80,#22c55e);color:#000;
-  box-shadow:0 0 22px rgba(74,222,128,.5);
-}
-#btn-menu{
-  background:rgba(255,255,255,.1);color:#fff;
-  border:2px solid rgba(255,255,255,.2);
-}
-.death-btn:hover{transform:scale(1.06)}
-</style>
+  <meta charset="UTF-8">
+  <title>Slither.io Clone - Full Stack Sandbox</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background: #111; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    
+    #canvas { display: block; width: 100vw; height: 100vh; background: #141419; }
+    
+    /* Interfaz del Menú Principal */
+    #menu {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: rgba(20, 20, 25, 0.95); padding: 40px; border-radius: 16px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5); text-align: center; min-width: 360px;
+      border: 1px solid #333; z-index: 10; transition: opacity 0.3s ease;
+    }
+    h1 { color: #fff; margin-bottom: 24px; font-size: 2.5rem; letter-spacing: 2px; text-transform: uppercase;
+         background: linear-gradient(45deg, #ff416c, #ff4b2b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    input[type="text"] {
+      width: 100%; padding: 14px; border: 2px solid #333; border-radius: 8px;
+      background: #1f1f26; color: #fff; font-size: 1rem; margin-bottom: 20px; outline: none; transition: border-color 0.2s;
+    }
+    input[type="text"]:focus { border-color: #ff416c; }
+    
+    /* Selector de Aspectos (Skins) */
+    .skin-label { color: #aaa; font-size: 0.9rem; margin-bottom: 8px; text-align: left; display: block; }
+    #skin-picker { display: flex; gap: 10px; justify-content: center; margin-bottom: 24px; flex-wrap: wrap; }
+    .skin-btn {
+      width: 45px; height: 45px; border-radius: 50%; cursor: pointer;
+      border: 3px solid transparent; transition: transform 0.2s, border-color 0.2s;
+    }
+    .skin-btn:hover { transform: scale(1.1); }
+    .skin-btn.active { border-color: #fff; transform: scale(1.15); }
+    
+    /* Botones de Modo de Juego */
+    .btn {
+      width: 100%; padding: 14px; margin: 8px 0; border: none; border-radius: 8px;
+      font-size: 1rem; font-weight: bold; color: #fff; cursor: pointer; transition: background 0.2s, transform 0.1s;
+    }
+    .btn-online { background: linear-gradient(135deg, #00b4db, #0083b0); }
+    .btn-online:hover { background: linear-gradient(135deg, #00c6ff, #0072ff); transform: translateY(-2px); }
+    .btn-bots { background: linear-gradient(135deg, #11998e, #38ef7d); }
+    .btn-bots:hover { background: linear-gradient(135deg, #12a89d, #43ff8b); transform: translateY(-2px); }
+    .btn:active { transform: translateY(0); }
+    
+    /* HUD de Estado durante la partida */
+    #hud { position: absolute; bottom: 20px; left: 20px; color: #fff; font-size: 1.2rem; pointer-events: none; text-shadow: 1px 1px 4px #000; z-index: 5; display: none; }
+    #leaderboard { position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.5); padding: 15px; border-radius: 8px; color: #fff; pointer-events: none; min-width: 180px; font-family: monospace; z-index: 5; display: none; }
+    #leaderboard h3 { border-bottom: 1px solid #555; padding-bottom: 5px; margin-bottom: 8px; color: #ff4365; }
+  </style>
 </head>
 <body>
 
-<div id="menu">
-  <div class="logo">
-    <span class="g">slither</span><span class="d">.</span><span class="io">io</span>
-  </div>
-
-  <svg class="snake-deco" width="90" height="52" viewBox="0 0 90 52">
-    <path d="M4 40 Q22 10 40 30 Q58 50 76 18" fill="none" stroke="#4ade80" stroke-width="11" stroke-linecap="round"/>
-    <circle cx="76" cy="18" r="8" fill="#4ade80"/>
-  </svg>
-
-  <input id="nickname" type="text" placeholder="Tu apodo" maxlength="16" autocomplete="off"/>
-
-  <div class="mode-wrap">
-    <button class="mode-btn" id="btn-bots">
-      <span class="icon">🤖</span>
-      <span class="label">Bots PVP</span>
-      <span class="sub">Guerra mundial</span>
-    </button>
-    <button class="mode-btn" id="btn-online">
-      <span class="icon">🌐</span>
-      <span class="label">Online</span>
-      <span class="sub">Con amigos</span>
-    </button>
-  </div>
-
-  <div class="skin-label">Elige tu color:</div>
-  <div class="skin-row" id="skin-picker"></div>
-  <div id="online-status">🌐 Conectando al servidor...</div>
-</div>
-
-<canvas id="gameCanvas"></canvas>
-<canvas id="minimap"></canvas>
-
-<div id="hud">
-  <div id="mode-badge"></div>
-  <div id="score-box">
-    <div>Longitud: <span id="len-val">10</span> &nbsp;|&nbsp; Puntos: <span id="animated-len" style="color:#facc15; font-weight:900;">0</span></div>
-    <div>Rango: <span id="rank-val">-</span> / <span id="total-val">-</span></div>
-  </div>
-  <div id="leaderboard">
-    <h3>Leaderboard</h3>
-    <div id="lb-list"></div>
-  </div>
-  <div id="boost-tip">Clic izquierdo / Espacio = Boost ⚡</div>
-</div>
-
-<div id="death">
-  <h2>💀 ¡Eliminado!</h2>
-  <div class="stats" id="death-stats"></div>
-  <div class="death-btns">
-    <button class="death-btn" id="btn-respawn">▶ Jugar de nuevo</button>
-    <button class="death-btn" id="btn-menu">🏠 Menú</button>
-  </div>
-</div>
-
-<script>
-const WORLD_W     = 4000, WORLD_H = 4000;
-const FOOD_COUNT  = 650;
-const BOT_COUNT   = 24; 
-const SNAKE_SPEED = 3.0;
-const BOOST_SPEED = 5.6;
-const TURN_SPEED  = 0.08;
-const SEGMENT_GAP = 7.5;
-const BASE_RADIUS = 7.5;
-
-const SKIN_COLORS = [
-  { head:'#4ade80', body:'#22c55e' },
-  { head:'#a855f7', body:'#7c3aed' },
-  { head:'#f97316', body:'#ea580c' },
-  { head:'#06b6d4', body:'#0891b2' },
-  { head:'#f43f5e', body:'#e11d48' },
-  { head:'#facc15', body:'#eab308' },
-  { head:'#00f5ff', body:'#00b5cc' },
-  { head:'#ff007f', body:'#cc0066' }
-];
-
-const BOT_NAMES = [
-  'KillerWorm','Alpha_Snake','Matrix_Bot','[PVP] Zeus','Slayer',
-  'DoomBringer','Viper','GhostWalker','Ryu','ShadowNinja',
-  'ToxicFangs','ApexPredator','Kraken','Titan','Overlord',
-  'NeonLight','Speedy','Glitch','Ragnar','Hyperion'
-];
-
-const canvas = document.getElementById('gameCanvas');
-const ctx    = canvas.getContext('2d');
-const mmCvs  = document.getElementById('minimap');
-const mmCtx  = mmCvs.getContext('2d');
-let W, H;
-
-// Objeto global de la cámara compartida
-const globalCam = { x: 0, y: 0 };
-
-function resize() {
-  W = canvas.width  = window.innerWidth;
-  H = canvas.height = window.innerHeight;
-  mmCvs.width = mmCvs.height = 120;
-}
-resize();
-window.addEventListener('resize', resize);
-
-let gameMode   = null;
-let gameActive = false;
-let selectedSkin = 0;
-let mouseX = 0, mouseY = 0, boosting = false;
-let animId = null;
-let visualScore = 0;
-let leaderboardData = [];
-let currentLeaderId = null;
-
-// ── Socket.io ──────────────────────────────────
-const socket = io({ autoConnect: true });
-
-socket.on('connect', () => {
-  const el = document.getElementById('online-status');
-  el.textContent = '🟢 Servidor en línea — Listo';
-  el.className = 'connected';
-});
-
-socket.on('init', (data) => {
-  online.myId   = data.id;
-  online.snakes = data.snakes;
-  online.foods  = data.foods;
-  visualScore   = 0;
-  
-  // Posicionamiento inmediato inicial de la cámara online
-  const me = online.snakes[data.id];
-  if(me && me.segs && me.segs.length > 0) {
-    globalCam.x = me.segs[0].x - W / 2;
-    globalCam.y = me.segs[0].y - H / 2;
-  }
-  showGame('online');
-});
-
-socket.on('state', (data) => {
-  if (gameMode !== 'online') return;
-  for (const [id, s] of Object.entries(data.snakes)) online.snakes[id] = s;
-  if (data.eatenFoodIds?.length) {
-    const eaten = new Set(data.eatenFoodIds);
-    online.foods = online.foods.filter(f => !eaten.has(f.id));
-  }
-  leaderboardData = data.lb;
-  if(data.lb.length > 0) currentLeaderId = data.lb[0].id;
-  updateLB(data.lb, online.myId, Object.keys(online.snakes).length);
-  const me = online.snakes[online.myId];
-  if (me) document.getElementById('len-val').textContent = me.segs?.length || '-';
-});
-
-socket.on('snake_spawned', s  => { online.snakes[s.id] = s; });
-socket.on('snake_died',    d  => { if (online.snakes[d.id]) online.snakes[d.id].alive = false; });
-socket.on('snake_removed', d  => { delete online.snakes[d.id]; });
-socket.on('dead', (data) => { showDeath(data.score, data.length); });
-
-setInterval(() => {
-  if (gameMode !== 'online' || !gameActive) return;
-  const angle = Math.atan2(mouseY - H/2, mouseX - W/2);
-  socket.emit('input', { angle, boost: boosting });
-}, 30);
-
-const online = { myId: null, snakes: {}, foods: [] };
-
-// ════════════════════════════════════════════════════════════
-//  LOCAL BOTS PVP MODE
-// ════════════════════════════════════════════════════════════
-const bots = { foods: [], snakes: [], player: null };
-
-function dist2(ax, ay, bx, by) {
-  const dx = ax-bx, dy = ay-by; return dx*dx+dy*dy;
-}
-
-function lerpAngle(snake, target, speed) {
-  let d = target - snake.angle;
-  while (d >  Math.PI) d -= 2*Math.PI;
-  while (d < -Math.PI) d += 2*Math.PI;
-  snake.angle += Math.sign(d) * Math.min(Math.abs(d), speed);
-}
-
-function snakeRadius(score) { return BASE_RADIUS + Math.min(score/120, 15); }
-
-function spawnBotFood(n=1) {
-  for (let i=0;i<n;i++) {
-    const hue = Math.random()*360;
-    const rand = Math.random();
-    let radius, scoreValue;
-    if (rand < 0.35) { radius = 9.5; scoreValue = 7; } 
-    else if (rand < 0.70) { radius = 6.5; scoreValue = 8; } 
-    else { radius = 4.0; scoreValue = 5; }
-
-    bots.foods.push({
-      x: Math.random()*WORLD_W, y: Math.random()*WORLD_H, r: radius,
-      color:`hsl(${hue},100%,60%)`, glow:`hsl(${hue},100%,75%)`,
-      value: scoreValue, pulse: Math.random()*Math.PI*2,
-    });
-  }
-}
-
-function createBotSnake(id, x, y, skin, name, isPlayer) {
-  const segs = [];
-  for (let i=0;i<12;i++) segs.push({x:x-i*SEGMENT_GAP, y});
-  return {
-    id, segs, name, skin, isPlayer,
-    angle: Math.random()*Math.PI*2,
-    alive: true, score: 0, boost: false,
-    aiState: 'explore', aiTimer: 0
-  };
-}
-
-function initBots() {
-  bots.foods = []; bots.snakes = []; visualScore = 0;
-  spawnBotFood(FOOD_COUNT);
-  
-  const px = WORLD_W/2 + (Math.random()-.5)*500;
-  const py = WORLD_H/2 + (Math.random()-.5)*500;
-  const pName = document.getElementById('nickname').value.trim() || 'Tú (Líder)';
-  
-  bots.player = createBotSnake('__player__', px, py, SKIN_COLORS[selectedSkin], pName, true);
-  bots.snakes.push(bots.player);
-
-  for (let i=0; i<BOT_COUNT; i++) {
-    const bx = Math.random()*(WORLD_W-400)+200;
-    const by = Math.random()*(WORLD_H-400)+200;
-    const name = BOT_NAMES[i % BOT_NAMES.length] + ' #' + Math.floor(Math.random()*90+10);
-    bots.snakes.push(createBotSnake('bot_'+i, bx, by, SKIN_COLORS[i % SKIN_COLORS.length], name, false));
-  }
-  
-  // Posicionar inmediatamente la cámara en la cabeza del jugador al nacer
-  globalCam.x = px - W / 2;
-  globalCam.y = py - H / 2;
-}
-
-function processBotAI(bot) {
-  if (bot.isPlayer || !bot.alive) return;
-  const head = bot.segs[0];
-  const rSelf = snakeRadius(bot.score);
-  
-  bot.aiTimer--;
-
-  const margin = 180;
-  if (head.x < margin) { lerpAngle(bot, 0, TURN_SPEED*2.5); return; }
-  if (head.x > WORLD_W - margin) { lerpAngle(bot, Math.PI, TURN_SPEED*2.5); return; }
-  if (head.y < margin) { lerpAngle(bot, Math.PI/2, TURN_SPEED*2.5); return; }
-  if (head.y > WORLD_H - margin) { lerpAngle(bot, -Math.PI/2, TURN_SPEED*2.5); return; }
-
-  let closestEnemy = null;
-  let minDistEnemy = Infinity;
-  let dangerZone = false;
-  let dangerAngle = 0;
-
-  for (const other of bots.snakes) {
-    if (other.id === bot.id || !other.alive) continue;
-    const oHead = other.segs[0];
-    const d2 = dist2(head.x, head.y, oHead.x, oHead.y);
-
-    if (d2 < 400*400 && d2 < minDistEnemy) {
-      minDistEnemy = d2;
-      closestEnemy = other;
-    }
-
-    const rOther = snakeRadius(other.score);
-    const checkSegments = Math.min(other.segs.length, 35);
-    for (let i = 0; i < checkSegments; i++) {
-      const seg = other.segs[i];
-      const sDist2 = dist2(head.x, head.y, seg.x, seg.y);
-      const safeDist = (rSelf + rOther + 32);
-      
-      if (sDist2 < safeDist * safeDist) {
-        dangerZone = true;
-        dangerAngle = Math.atan2(head.y - seg.y, head.x - seg.x);
-        break;
-      }
-    }
-    if (dangerZone) break;
-  }
-
-  if (dangerZone) {
-    bot.aiState = 'evade';
-    lerpAngle(bot, dangerAngle, TURN_SPEED * 3.0);
-    bot.boost = true;
-    return;
-  }
-
-  if (closestEnemy) {
-    const enemyHead = closestEnemy.segs[0];
-    const angleToEnemy = Math.atan2(enemyHead.y - head.y, enemyHead.x - head.x);
-    const isTargetLeader = (closestEnemy.id === currentLeaderId);
-
-    if (isTargetLeader && bot.score > 100) {
-      bot.aiState = 'hunt_leader';
-      const interceptX = enemyHead.x + Math.cos(closestEnemy.angle) * 60;
-      const interceptY = enemyHead.y + Math.sin(closestEnemy.angle) * 60;
-      lerpAngle(bot, Math.atan2(interceptY - head.y, interceptX - head.x), TURN_SPEED * 1.5);
-      bot.boost = (minDistEnemy < 200*200);
-    }
-    else if (bot.score >= closestEnemy.score) {
-      bot.aiState = 'attack';
-      const attackX = enemyHead.x + Math.cos(closestEnemy.angle) * 45;
-      const attackY = enemyHead.y + Math.sin(closestEnemy.angle) * 45;
-      lerpAngle(bot, Math.atan2(attackY - head.y, attackX - head.x), TURN_SPEED * 1.3);
-      bot.boost = (minDistEnemy < 150*150 && Math.random() < 0.7);
-    } 
-    else {
-      bot.aiState = 'retreat';
-      lerpAngle(bot, angleToEnemy + Math.PI + (Math.random() - 0.5), TURN_SPEED * 1.1);
-      bot.boost = false;
-    }
-  } 
-  else {
-    bot.boost = false;
-    if (bot.aiTimer <= 0) {
-      bot.aiState = 'explore';
-      let bestFood = null;
-      let minFoodD2 = Infinity;
-      
-      for (const f of bots.foods) {
-        const d2 = dist2(head.x, head.y, f.x, f.y);
-        if (d2 < minFoodD2) { minFoodD2 = d2; bestFood = f; }
-      }
-      
-      if (bestFood && minFoodD2 < 350*350) {
-        bot.targetAngle = Math.atan2(bestFood.y - head.y, bestFood.x - head.x);
-        bot.aiTimer = 25;
-      } else {
-        bot.targetAngle = bot.angle + (Math.random() - 0.5) * 2.0;
-        bot.aiTimer = Math.floor(Math.random()*40 + 30);
-      }
-    }
-    lerpAngle(bot, bot.targetAngle, TURN_SPEED);
-  }
-}
-
-function killBotSnake(snake) {
-  snake.alive = false;
-  for (let i = 0; i < snake.segs.length; i += 2) {
-    const seg = snake.segs[i];
-    const hue = Math.random()*360;
-    bots.foods.push({
-      x: seg.x + (Math.random()-.5)*15, y: seg.y + (Math.random()-.5)*15,
-      r: Math.random() > 0.4 ? 9.0 : 6.5,
-      color: `hsl(${hue},100%,60%)`, glow: `hsl(${hue},100%,80%)`,
-      value: 12, pulse: 0
-    });
-  }
-  
-  if (snake.isPlayer) {
-    setTimeout(() => showDeath(snake.score, snake.segs.length), 150);
-  }
-}
-
-function updateBotsLoop(dt) {
-  if (bots.player.alive) {
-    const targetAngle = Math.atan2(mouseY - H/2, mouseX - W/2);
-    lerpAngle(bots.player, targetAngle, TURN_SPEED * dt);
-    bots.player.boost = boosting;
-  }
-
-  for (const s of bots.snakes) {
-    if (!s.alive) continue;
-    if (!s.isPlayer) processBotAI(s);
-
-    const currentSpeed = s.boost ? BOOST_SPEED : SNAKE_SPEED;
-    const head = s.segs[0];
+  <div id="menu">
+    <h1>Slither Sandbox</h1>
+    <input type="text" id="nickname" placeholder="Tu Nombre de Usuario" value="Pythonic" maxlength="14">
     
-    const nextX = head.x + Math.cos(s.angle) * currentSpeed * dt;
-    const nextY = head.y + Math.sin(s.angle) * currentSpeed * dt;
+    <span class="skin-label">Elige tu aspecto:</span>
+    <div id="skin-picker"></div>
+    
+    <button class="btn btn-online" id="start-online">Modo Multijugador (Online)</button>
+    <button class="btn btn-bots" id="start-bots">Modo de Práctica (Bots)</button>
+  </div>
 
-    if (nextX < 0 || nextX > WORLD_W || nextY < 0 || nextY > WORLD_H) {
-      killBotSnake(s); continue;
-    }
+  <div id="hud">Puntuación: <span id="score-val">0</span></div>
+  <div id="leaderboard">
+    <h3>Top 5</h3>
+    <div id="leaderboard-list"></div>
+  </div>
 
-    s.segs.unshift({ x: nextX, y: nextY });
+  <canvas id="canvas"></canvas>
 
-    if (s.boost && s.score > 2 && Math.random() < 0.12) {
-      s.score -= 1;
-    }
+  <!-- Cliente de Socket.io (Se activa en producción o red local) -->
+  <script src="/socket.io/socket.io.js" onerror="console.log('Modo online deshabilitado: No se detectó servidor de Node.js dinámico.')"></script>
 
-    const targetLength = Math.floor(12 + s.score * 0.4);
-    while (s.segs.length > targetLength) s.segs.pop();
-  }
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    let W = canvas.width = window.innerWidth;
+    let H = canvas.height = window.innerHeight;
+    window.addEventListener('resize', () => { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; });
 
-  for (const s of bots.snakes) {
-    if (!s.alive) continue;
-    const head = s.segs[0];
-    const rad = snakeRadius(s.score);
+    // ── Configuración Inicial del Mundo ──
+    const MAP_SIZE = 4000; 
+    let mode = null; // 'online' o 'bots'
+    let selectedSkin = 0;
+    let socket = null;
 
-    for (let i = bots.foods.length - 1; i >= 0; i--) {
-      const f = bots.foods[i];
-      if (dist2(head.x, head.y, f.x, f.y) < (rad + f.r)**2) {
-        s.score += f.value;
-        bots.foods.splice(i, 1);
-        spawnBotFood(1);
+    const SKIN_COLORS = [
+      { head: '#ff416c', body: '#ff4b2b' }, // Fuego
+      { head: '#00b4db', body: '#0083b0' }, // Océano
+      { head: '#11998e', body: '#38ef7d' }, // Ácido
+      { head: '#f7971e', body: '#ffd200' }, // Oro
+      { head: '#b20a2c', body: '#fffbd5' }  // Vampiro
+    ];
+
+    // Datos globales compartidos por iteración
+    let localPlayer = { x: MAP_SIZE/2, y: MAP_SIZE/2, angle: 0, targetAngle: 0, score: 0, speed: 200 };
+    let onlineSnakes = {};
+    let onlineFoods = [];
+
+    // Estructuras de entorno local offline
+    let bots = { player: null, list: [], foods: [], cam: { x: 0, y: 0 } };
+
+    // Entrada de ratón
+    const mouse = { x: W / 2, y: H / 2 };
+    window.addEventListener('mousemove', (e) => {
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+      if (mode === 'bots' && bots.player) {
+        bots.player.targetAngle = Math.atan2(mouse.y - H / 2, mouse.x - W / 2);
       }
-    }
-  }
+    });
 
-  for (let a = 0; a < bots.snakes.length; a++) {
-    const sa = bots.snakes[a]; if (!sa.alive) continue;
-    const hA = sa.segs[0];
-    const rA = snakeRadius(sa.score);
+    // ── Construcción de la Paleta de Aspectos (Skins UI) ──────────────────
+    const picker = document.getElementById('skin-picker');
+    SKIN_COLORS.forEach((skin, i) => {
+      const btn = document.createElement('div');
+      btn.className = 'skin-btn' + (i === 0 ? ' active' : '');
+      btn.style.background = `linear-gradient(135deg, ${skin.head}, ${skin.body})`;
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.skin-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active'); 
+        selectedSkin = i;
+      });
+      picker.appendChild(btn);
+    });
 
-    for (let b = 0; b < bots.snakes.length; b++) {
-      if (a === b) continue;
-      const sb = bots.snakes[b]; if (!sb.alive) continue;
-      const rB = snakeRadius(sb.score);
-
-      for (let i = 1; i < sb.segs.length; i++) {
-        if (dist2(hA.x, hA.y, sb.segs[i].x, sb.segs[i].y) < (rA + rB * 0.85)**2) {
-          killBotSnake(sa);
-          break;
+    // ── Clases Auxiliares para Simulación Offline (Modo Bots) ──
+    class Snake {
+      constructor(id, x, y, name, skinIndex, isBot = true) {
+        this.id = id;
+        this.name = name;
+        this.skin = SKIN_COLORS[skinIndex];
+        this.isBot = isBot;
+        this.alive = true;
+        this.angle = 0;
+        this.targetAngle = 0;
+        this.speed = 180;
+        this.radius = 18;
+        this.score = 0;
+        
+        // Inicializar segmentos iniciales de la estructura lineal
+        this.segs = [];
+        let length = 15;
+        for(let i=0; i<length; i++) {
+          this.segs.push({ x: x - i * 10, y: y });
         }
       }
-      if (!sa.alive) break;
-    }
-  }
 
-  for (let i = 1; i < bots.snakes.length; i++) {
-    if (!bots.snakes[i].alive) {
-      const rx = Math.random()*(WORLD_W-400)+200;
-      const ry = Math.random()*(WORLD_H-400)+200;
-      const skinI = Math.floor(Math.random()*SKIN_COLORS.length);
-      const nameI = BOT_NAMES[Math.floor(Math.random()*BOT_NAMES.length)] + ' #' + Math.floor(Math.random()*90+10);
-      bots.snakes[i] = createBotSnake('bot_'+i, rx, ry, SKIN_COLORS[skinI], nameI, false);
-    }
-  }
+      update(dt) {
+        if (!this.alive) return;
 
-  const sortedActive = bots.snakes.filter(s => s.alive).sort((a,b) => b.score - a.score);
-  if (sortedActive.length > 0) currentLeaderId = sortedActive[0].id;
+        // Comportamiento básico de la Inteligencia Artificial (Modo Bot)
+        if (this.isBot) {
+          if (Math.random() < 0.03) { 
+            this.targetAngle += (Math.random() - 0.5) * 2; 
+          }
+          // Límite perimetral del mapa para forzar retorno de la IA
+          if (this.segs[0].x < 200 || this.segs[0].x > MAP_SIZE - 200 || this.segs[0].y < 200 || this.segs[0].y > MAP_SIZE - 200) {
+            this.targetAngle = Math.atan2(MAP_SIZE/2 - this.segs[0].y, MAP_SIZE/2 - this.segs[0].x);
+          }
+        }
 
-  const lbMapped = sortedActive.slice(0, 10).map(s => ({
-    id: s.id, name: s.name, score: s.score
-  }));
-  
-  updateLB(lbMapped, '__player__', sortedActive.length);
-  document.getElementById('len-val').textContent = bots.player.segs.length;
+        // Interpolación del ángulo para suavizado direccional
+        let diff = this.targetAngle - this.angle;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        this.angle += diff * 8 * dt;
 
-  if (visualScore < bots.player.score) {
-    const diff = bots.player.score - visualScore;
-    visualScore += Math.max(1, Math.ceil(diff * 0.12 * dt));
-    if (visualScore > bots.player.score) visualScore = bots.player.score;
-  } else if (visualScore > bots.player.score) {
-    visualScore = bots.player.score;
-  }
-  document.getElementById('animated-len').textContent = visualScore;
-}
+        // Desplazamiento del nodo principal (Cabeza)
+        this.segs[0].x += Math.cos(this.angle) * this.speed * dt;
+        this.segs[0].y += Math.sin(this.angle) * this.speed * dt;
 
-// ════════════════════════════════════════════════════════════
-//  MOTOR GRÁFICO SUAVIZADO
-// ════════════════════════════════════════════════════════════
-function drawHexGrid(camX, camY) {
-  const sz = 32, hW = sz * Math.sqrt(3), hH = sz * 2;
-  const cols = Math.ceil(W / hW) + 2, rows = Math.ceil(H / (hH * 0.75)) + 2;
-  const oX = -(camX % hW), oY = -(camY % (hH * 0.75));
-  
-  ctx.strokeStyle = 'rgba(255,255,255,0.035)'; ctx.lineWidth = 1;
-  for (let r = -1; r < rows; r++) {
-    for (let c = -1; c < cols; c++) {
-      const cx = oX + c * hW + (r % 2 === 0 ? 0 : hW / 2);
-      const cy = oY + r * hH * 0.75;
-      ctx.beginPath();
-      for (let i = 0; i < 6; i++) {
-        const a = Math.PI / 180 * (60 * i - 30);
-        const px = cx + sz * Math.cos(a), py = cy + sz * Math.sin(a);
-        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        // Arrastre cinemático de los segmentos restantes
+        const targetDist = 12; 
+        for (let i = 1; i < this.segs.length; i++) {
+          let dx = this.segs[i-1].x - this.segs[i].x;
+          let dy = this.segs[i-1].y - this.segs[i].y;
+          let dist = Math.hypot(dx, dy);
+          if (dist > targetDist) {
+            let ratio = targetDist / dist;
+            this.segs[i].x = this.segs[i-1].x - dx * ratio;
+            this.segs[i].y = this.segs[i-1].y - dy * ratio;
+          }
+        }
       }
-      ctx.closePath(); ctx.stroke();
-    }
-  }
-}
 
-function drawSnakeObj(s, isMe, camX, camY) {
-  const segs = s.segs; if (!segs || segs.length < 2) return;
-  const skin = s.skin || SKIN_COLORS[0];
-  const rad = snakeRadius(s.score || 0);
+      draw(ctx, camX, camY) {
+        if (!this.alive) return;
+        ctx.save();
+        
+        // Renderizado del cuerpo (De cola a cabeza para correcto solapamiento)
+        for (let i = this.segs.length - 1; i >= 1; i--) {
+          ctx.beginPath();
+          ctx.arc(this.segs[i].x - camX, this.segs[i].y - camY, this.radius * 0.9, 0, Math.PI*2);
+          ctx.fillStyle = this.skin.body;
+          ctx.shadowBlur = i === 1 ? 4 : 0;
+          ctx.shadowColor = this.skin.body;
+          ctx.fill();
+        }
 
-  ctx.save();
-  ctx.shadowBlur = s.boost ? 16 : 0; 
-  ctx.shadowColor = skin.head;
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = rad * 2;
+        // Renderizado del nodo principal (Cabeza)
+        ctx.beginPath();
+        ctx.arc(this.segs[0].x - camX, this.segs[0].y - camY, this.radius, 0, Math.PI*2);
+        ctx.fillStyle = this.skin.head;
+        ctx.fill();
 
-  for (let i = segs.length - 1; i > 0; i--) {
-    const pct = i / segs.length;
-    ctx.beginPath();
-    ctx.moveTo(segs[i].x, segs[i].y);
-    ctx.lineTo(segs[i-1].x, segs[i-1].y);
-    ctx.strokeStyle = skin.body;
-    ctx.globalAlpha = 0.50 + 0.50 * (1 - pct);
-    ctx.stroke();
-  }
-  ctx.restore();
+        // Ojos direccionales para legibilidad del ángulo físico
+        let eyeX = this.segs[0].x - camX + Math.cos(this.angle + 0.5) * (this.radius * 0.5);
+        let eyeY = this.segs[0].y - camY + Math.sin(this.angle + 0.5) * (this.radius * 0.5);
+        ctx.beginPath(); ctx.arc(eyeX, eyeY, 4, 0, Math.PI*2); ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.beginPath(); ctx.arc(eyeX, eyeY, 1.5, 0, Math.PI*2); ctx.fillStyle = '#000'; ctx.fill();
 
-  const head = segs[0];
-  ctx.beginPath(); ctx.arc(head.x, head.y, rad * 1.12, 0, Math.PI * 2);
-  ctx.fillStyle = skin.head; ctx.fill();
+        eyeX = this.segs[0].x - camX + Math.cos(this.angle - 0.5) * (this.radius * 0.5);
+        eyeY = this.segs[0].y - camY + Math.sin(this.angle - 0.5) * (this.radius * 0.5);
+        ctx.beginPath(); ctx.arc(eyeX, eyeY, 4, 0, Math.PI*2); ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.beginPath(); ctx.arc(eyeX, eyeY, 1.5, 0, Math.PI*2); ctx.fillStyle = '#000'; ctx.fill();
 
-  const ang = s.angle || 0, eOffset = rad * 0.48, eRadius = rad * 0.30;
-  [ang - 0.45, ang + 0.45].forEach(a => {
-    const ex = head.x + Math.cos(a) * eOffset;
-    const ey = head.y + Math.sin(a) * eOffset;
-    ctx.beginPath(); ctx.arc(ex, ey, eRadius, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffffff'; ctx.fill();
-    ctx.beginPath();
-    ctx.arc(ex + Math.cos(ang) * eRadius * 0.35, ey + Math.sin(ang) * eRadius * 0.35, eRadius * 0.6, 0, Math.PI * 2);
-    ctx.fillStyle = '#111116'; ctx.fill();
-  });
-
-  ctx.font = `bold ${Math.max(11, rad * 0.95)}px Nunito`;
-  ctx.textAlign = 'center';
-  ctx.fillStyle = isMe ? '#4ade80' : '#e2e8f0';
-  ctx.shadowBlur = 4; ctx.shadowColor = '#000000';
-  ctx.fillText(s.name || '', head.x, head.y - rad * 1.9);
-  ctx.shadowBlur = 0;
-}
-
-function drawFoodArr(foodArr) {
-  const pulseTime = Date.now() / 900;
-  ctx.save();
-  for (const f of foodArr) {
-    if (f.x - globalCam.x < -30 || f.x - globalCam.x > W + 30 || f.y - globalCam.y < -30 || f.y - globalCam.y > H + 30) continue;
-    
-    const pulseFactor = 1.0 + Math.sin(pulseTime + f.x * 0.02) * 0.12;
-    ctx.shadowBlur = 8; ctx.shadowColor = f.glow || f.color;
-    ctx.beginPath(); ctx.arc(f.x, f.y, f.r * pulseFactor, 0, Math.PI * 2);
-    ctx.fillStyle = f.color; ctx.fill();
-  }
-  ctx.restore();
-}
-
-function drawMinimap(snakeList, foodArr, myIdOrPlayer) {
-  const mSize = 120;
-  mmCtx.fillStyle = 'rgba(8, 11, 22, 0.88)';
-  mmCtx.fillRect(0, 0, mSize, mSize);
-  const scaleX = mSize / WORLD_W, scaleY = mSize / WORLD_H;
-
-  for (let i = 0; i < foodArr.length; i += 2) {
-    const f = foodArr[i];
-    mmCtx.fillStyle = 'rgba(255,255,255,0.2)';
-    mmCtx.fillRect(f.x * scaleX, f.y * scaleY, 1, 1);
-  }
-
-  for (const s of snakeList) {
-    if (!s || !s.segs || s.segs.length === 0 || !s.alive) continue;
-    const h = s.segs[0];
-    const isMe = gameMode === 'bots' ? s.isPlayer : (s.id === myIdOrPlayer);
-    mmCtx.fillStyle = isMe ? '#4ade80' : (s.id === currentLeaderId ? '#facc15' : s.skin?.head || '#fff');
-    mmCtx.beginPath(); mmCtx.arc(h.x * scaleX, h.y * scaleY, isMe ? 3.2 : 1.8, 0, Math.PI * 2); mmCtx.fill();
-  }
-
-  mmCtx.strokeStyle = 'rgba(255,255,255,0.25)'; mmCtx.lineWidth = 1;
-  mmCtx.strokeRect(globalCam.x * scaleX, globalCam.y * scaleY, W * scaleX, H * scaleY);
-}
-
-let lastTimestamp = 0;
-
-function frame(timestamp) {
-  if (!lastTimestamp) lastTimestamp = timestamp;
-  const dt = Math.min((timestamp - lastTimestamp) / 16.67, 3.5);
-  lastTimestamp = timestamp;
-
-  ctx.clearRect(0, 0, W, H);
-
-  // ── CONTROL DINÁMICO DE LA CÁMARA LOCAL (FIJADA EN EL JUGADOR) ──
-  if (gameMode === 'bots') {
-    updateBotsLoop(dt);
-    if (bots.player && bots.player.alive && bots.player.segs.length > 0) {
-      // Interpola la posición de la cámara hacia la cabeza de tu serpiente local
-      globalCam.x += (bots.player.segs[0].x - W / 2 - globalCam.x) * 0.15 * dt;
-      globalCam.y += (bots.player.segs[0].y - H / 2 - globalCam.y) * 0.15 * dt;
-    }
-    
-    drawHexGrid(globalCam.x, globalCam.y);
-    ctx.save();
-    ctx.translate(-globalCam.x, -globalCam.y);
-
-    ctx.strokeStyle = 'rgba(248, 113, 113, 0.3)'; ctx.lineWidth = 6;
-    ctx.strokeRect(0, 0, WORLD_W, WORLD_H);
-
-    drawFoodArr(bots.foods);
-    const renderOrder = [...bots.snakes].sort((a,b)=>a.score - b.score);
-    for (const s of renderOrder) {
-      if (s.alive) drawSnakeObj(s, s.isPlayer, globalCam.x, globalCam.y);
-    }
-    drawMinimap(bots.snakes, bots.foods, null);
-  } 
-  else {
-    // Modo Multijugador en Red (Online)
-    const me = online.snakes[online.myId];
-    if (me && me.alive && me.segs && me.segs.length > 0) {
-      // Interpola la posición de la cámara hacia la cabeza de tu serpiente de red
-      globalCam.x += (me.segs[0].x - W / 2 - globalCam.x) * 0.15 * dt;
-      globalCam.y += (me.segs[0].y - H / 2 - globalCam.y) * 0.15 * dt;
-    }
-    
-    drawHexGrid(globalCam.x, globalCam.y);
-    ctx.save();
-    ctx.translate(-globalCam.x, -globalCam.y);
-
-    ctx.strokeStyle = 'rgba(248, 113, 113, 0.3)'; ctx.lineWidth = 6;
-    ctx.strokeRect(0, 0, WORLD_W, WORLD_H);
-
-    drawFoodArr(online.foods);
-    const snakeArr = Object.values(online.snakes);
-    for (const s of snakeArr) {
-      if (s.id !== online.myId && s.alive) drawSnakeObj(s, false, globalCam.x, globalCam.y);
-    }
-    if (me && me.alive) drawSnakeObj(me, true, globalCam.x, globalCam.y);
-    drawMinimap(snakeArr, online.foods, online.myId);
-    
-    if (me) {
-      const targetScore = me.score || me.segs.length;
-      if (visualScore < targetScore) {
-        visualScore += Math.max(1, Math.ceil((targetScore - visualScore) * 0.12 * dt));
-        if (visualScore > targetScore) visualScore = targetScore;
+        // Indicador de Texto del Nombre
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(this.name, this.segs[0].x - camX, this.segs[0].y - camY - (this.radius + 8));
+        ctx.restore();
       }
-      document.getElementById('animated-len').textContent = visualScore;
+
+      grow(amount) {
+        this.score += amount;
+        for (let i = 0; i < amount; i++) {
+          let last = this.segs[this.segs.length - 1];
+          this.segs.push({ x: last.x, y: last.y });
+        }
+      }
     }
-  }
 
-  ctx.restore();
-  if (gameActive) animId = requestAnimationFrame(frame);
-}
+    // ── Lógica de Simulación Local (Offline Loop) ──
+    function initBotsMode() {
+      mode = 'bots';
+      const nick = document.getElementById('nickname').value || 'User';
+      
+      bots.player = new Snake('player', MAP_SIZE/2, MAP_SIZE/2, nick, selectedSkin, false);
+      bots.list = [bots.player];
 
-function updateLB(lb, myId, total) {
-  const list = document.getElementById('lb-list');
-  list.innerHTML = '';
-  lb.forEach((e, i) => {
-    const isMe = gameMode === 'bots' ? e.id === '__player__' : e.id === myId;
-    const row = document.createElement('div');
-    row.className = 'lb-row' + (isMe ? ' me' : '');
-    row.innerHTML = `<span class="lb-rank">#${i+1}</span><span class="lb-name">${e.name}</span><span class="lb-score">${e.score}</span>`;
-    list.appendChild(row);
-  });
-  const rank = lb.findIndex(e => gameMode === 'bots' ? e.id === '__player__' : e.id === myId);
-  document.getElementById('rank-val').textContent = rank >= 0 ? rank + 1 : '>';
-  document.getElementById('total-val').textContent = total;
-}
+      // Inicialización de Inteligencias Artificiales adicionales
+      const botNames = ['Cobrita', 'Nokia3310', 'Viper', 'Anaconda', 'Asphalt', 'Glutton', 'Basilisk'];
+      for (let i = 0; i < botNames.length; i++) {
+        bots.list.push(new Snake('bot'+i, Math.random() * (MAP_SIZE - 400) + 200, Math.random() * (MAP_SIZE - 400) + 200, botNames[i], Math.floor(Math.random() * SKIN_COLORS.length), true));
+      }
 
-function showGame(mode) {
-  gameMode = mode; gameActive = true;
-  document.getElementById('menu').style.display = 'none';
-  document.getElementById('death').style.display = 'none';
-  canvas.style.display = 'block'; mmCvs.style.display = 'block';
-  document.getElementById('hud').style.display = 'block';
-  
-  const badge = document.getElementById('mode-badge');
-  if (mode === 'bots') { badge.textContent = '🤖 Bots PVP'; badge.className = 'mode-badge bots'; } 
-  else { badge.textContent = '🌐 Online'; badge.className = 'mode-badge online'; }
-  
-  if (animId) cancelAnimationFrame(animId);
-  lastTimestamp = 0;
-  animId = requestAnimationFrame(frame);
-}
+      // Generación estática de alimento local
+      for (let i = 0; i < 300; i++) {
+        bots.foods.push({
+          x: Math.random() * MAP_SIZE,
+          y: Math.random() * MAP_SIZE,
+          r: Math.random() * 4 + 3,
+          color: `hsl(${Math.random() * 360}, 100%, 60%)`
+        });
+      }
 
-function showDeath(score, length) {
-  gameActive = false;
-  document.getElementById('death-stats').innerHTML = `Longitud: <b>${length}</b> &nbsp;|&nbsp; Puntuación: <b>${score}</b>`;
-  document.getElementById('death').style.display = 'flex';
-}
+      // Sincronización de coordenadas iniciales de la cámara
+      bots.cam.x = bots.player.segs[0].x - W / 2;
+      bots.cam.y = bots.player.segs[0].y - H / 2;
+    }
 
-function goMenu() {
-  gameActive = false; gameMode = null;
-  if (animId) { cancelAnimationFrame(animId); animId = null; }
-  canvas.style.display = 'none'; mmCvs.style.display = 'none';
-  document.getElementById('hud').style.display = 'none';
-  document.getElementById('death').style.display = 'none';
-  document.getElementById('menu').style.display = 'flex';
-}
+    function updateBotsLoop(dt) {
+      // Ciclo de actualización de entidades físicas y colisiones
+      bots.list.forEach(snake => {
+        if (!snake.alive) return;
+        snake.update(dt);
 
-document.getElementById('btn-bots').addEventListener('click', () => { initBots(); showGame('bots'); });
-document.getElementById('btn-online').addEventListener('click', () => {
-  const name = document.getElementById('nickname').value.trim() || 'Jugador';
-  socket.emit('join', { name, skinIdx: selectedSkin });
-});
+        // Intersección de colisiones con alimentos
+        bots.foods.forEach((food, fIdx) => {
+          let dist = Math.hypot(snake.segs[0].x - food.x, snake.segs[0].y - food.y);
+          if (dist < snake.radius + food.r) {
+            snake.grow(1);
+            // Reposicionamiento del alimento consumido dentro del mapa perimetral
+            food.x = Math.random() * MAP_SIZE;
+            food.y = Math.random() * MAP_SIZE;
+          }
+        });
+      });
 
-document.getElementById('btn-respawn').addEventListener('click', () => {
-  if (gameMode === 'bots') { initBots(); showGame('bots'); } 
-  else {
-    const name = document.getElementById('nickname').value.trim() || 'Jugador';
-    socket.emit('respawn', { name, skinIdx: selectedSkin });
-    document.getElementById('death').style.display = 'none';
-    document.getElementById('hud').style.display = 'block';
-    gameActive = true; visualScore = 0; lastTimestamp = 0;
-    animId = requestAnimationFrame(frame);
-  }
-});
-document.getElementById('btn-menu').addEventListener('click', goMenu);
+      // Verificación cruzada de colisiones estructurales entre serpientes (Cabeza vs Cuerpo)
+      bots.list.forEach(snake => {
+        if (!snake.alive) return;
+        bots.list.forEach(target => {
+          if (!target.alive || snake.id === target.id) return;
 
-canvas.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
-canvas.addEventListener('mousedown', e => { if(e.button === 0) boosting = true; });
-canvas.addEventListener('mouseup', e => { if(e.button === 0) boosting = false; });
-window.addEventListener('keydown', e => { if(e.code === 'Space') { e.preventDefault(); boosting = true; } });
-window.addEventListener('keyup', e => { if(e.code === 'Space') boosting = false; });
+          // Se evalúa cada segmento del cuerpo objetivo
+          for (let i = 0; i < target.segs.length; i++) {
+            let dist = Math.hypot(snake.segs[0].x - target.segs[i].x, snake.segs[0].y - target.segs[i].y);
+            if (dist < snake.radius + target.radius * 0.8) {
+              snake.alive = false;
+              if (snake.id === 'player') {
+                alert('Fin de la partida offline. Puntuación obtenida: ' + snake.score);
+                location.reload();
+              } else {
+                // Re-spawn reactivo para el bot destruido
+                setTimeout(() => {
+                  let idx = bots.list.findIndex(b => b.id === snake.id);
+                  if (idx !== -1) bots.list[idx] = new Snake(snake.id, Math.random() * MAP_SIZE, Math.random() * MAP_SIZE, snake.name, Math.floor(Math.random() * SKIN_COLORS.length), true);
+                }, 3000);
+              }
+            }
+          }
+        });
+      });
 
-const picker = document.getElementById('skin-picker');
-SKIN_COLORS.forEach((skin, i) => {
-  const btn = document.createElement('div');
-  btn.className = 'skin-btn' + (i === 0 ? ' active' : '');
-  btn.style.background = `linear-gradient(135deg, ${skin.head}, ${skin.body})`;
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.skin-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active'); selectedSkin = i;
-  });
-  picker.appendChild(btn);
-});
-</script>
+      // Actualizar el valor del HUD si el jugador local sigue con vida
+      if (bots.player && bots.player.alive) {
+        document.getElementById('score-val').innerText = bots.player.score;
+      }
+
+      // Ordenar y actualizar tabla de clasificación estática
+      let sorted = [...bots.list].sort((a,b) => b.score - a.score).slice(0, 5);
+      let listHTML = '';
+      sorted.forEach((s, idx) => {
+        listHTML += `<div>#${idx+1} ${s.name}: ${s.score}</div>`;
+      });
+      document.getElementById('leaderboard-list').innerHTML = listHTML;
+    }
+
+    // ── Conexión de Red Multijugador Real (Modo Online) ──
+    function initOnlineMode() {
+      if (typeof io === 'undefined') {
+        alert('Servidor de red local no disponible. Cargando el modo de práctica con bots automáticos por seguridad.');
+        initBotsMode();
+        return;
+      }
+      
+      mode = 'online';
+      socket = io();
+
+      const nick = document.getElementById('nickname').value || 'ProPlayer';
+      socket.emit('join', { name: nick, skin: selectedSkin });
+
+      // Escuchadores de eventos de red distribuidos del backend
+      socket.on('snapshot', (data) => {
+        onlineSnakes = data.snakes;
+        onlineFoods = data.foods;
+      });
+
+      // Evento reactivo ante destrucción estructural
+      socket.on('kill', () => {
+        alert('Has colisionado contra otra serpiente de la red. Reintentar.');
+        location.reload();
+      });
+    }
+
+    // ── Controladores de Inicialización de la UI ──
+    document.getElementById('start-bots').addEventListener('click', () => {
+      document.getElementById('menu').style.opacity = '0';
+      setTimeout(() => {
+        document.getElementById('menu').style.display = 'none';
+        document.getElementById('hud').style.display = 'block';
+        document.getElementById('leaderboard').style.display = 'block';
+        initBotsMode();
+      }, 300);
+    });
+
+    document.getElementById('start-online').addEventListener('click', () => {
+      document.getElementById('menu').style.opacity = '0';
+      setTimeout(() => {
+        document.getElementById('menu').style.display = 'none';
+        document.getElementById('hud').style.display = 'block';
+        document.getElementById('leaderboard').style.display = 'block';
+        initOnlineMode();
+      }, 300);
+    });
+
+    // ── Motor Gráfico y Bucle de Animación Principal (Delta Time Integrado) ──
+    let lastTime = performance.now();
+
+    function frame(currentTime) {
+      requestAnimationFrame(frame);
+      
+      // Cálculo preciso del Delta Time matemático (segundos transcurridos)
+      let dt = (currentTime - lastTime) / 1000;
+      if (dt > 0.1) dt = 0.1; // Protección contra picos por pérdida de foco
+      lastTime = currentTime;
+
+      // Limpieza recursiva del Canvas
+      ctx.clearRect(0, 0, W, H);
+
+      let camX = 0, camY = 0;
+
+      if (mode === 'bots') {
+        // Ejecución física del sandbox offline
+        updateBotsLoop(dt);
+        
+        // Suavizado dinámico de la cámara local
+        if (bots.player && bots.player.alive) {
+          bots.cam.x += (bots.player.segs[0].x - W / 2 - bots.cam.x) * 0.15 * dt * 60;
+          bots.cam.y += (bots.player.segs[0].y - H / 2 - bots.cam.y) * 0.15 * dt * 60;
+        }
+        camX = bots.cam.x;
+        camY = bots.cam.y;
+
+      } else if (mode === 'online') {
+        // Lógica de transmisión cíclica de entrada hacia el servidor Node.js
+        let localAngle = Math.atan2(mouse.y - H / 2, mouse.x - W / 2);
+        socket.emit('input', localAngle);
+
+        // Localizar id propio de la red de datos para enfoque de cámara
+        let mySnake = onlineSnakes[socket.id];
+        if (mySnake && mySnake.segs && mySnake.segs[0]) {
+          camX = mySnake.segs[0].x - W / 2;
+          camY = mySnake.segs[0].y - H / 2;
+          document.getElementById('score-val').innerText = mySnake.score;
+        }
+
+        // Actualizar tabla de clasificación en red local
+        let sorted = Object.values(onlineSnakes).sort((a,b) => b.score - a.score).slice(0, 5);
+        let listHTML = '';
+        sorted.forEach((s, idx) => {
+          listHTML += `<div>#${idx+1} ${s.name}: ${s.score}</div>`;
+        });
+        document.getElementById('leaderboard-list').innerHTML = listHTML;
+      }
+
+      // Renderizado del Fondo de Retícula Estructural (Grid)
+      ctx.save();
+      ctx.strokeStyle = '#23232f';
+      ctx.lineWidth = 1;
+      let gridSize = 50;
+      let startX = Math.floor(camX / gridSize) * gridSize;
+      let startY = Math.floor(camY / gridSize) * gridSize;
+
+      for (let x = startX; x < startX + W + gridSize; x += gridSize) {
+        ctx.beginPath(); ctx.moveTo(x - camX, 0); ctx.lineTo(x - camX, H); ctx.stroke();
+      }
+      for (let y = startY; y < startY + H + gridSize; y += gridSize) {
+        ctx.beginPath(); ctx.moveTo(0, y - camY); ctx.lineTo(W, y - camY); ctx.stroke();
+      }
+      
+      // Dibujado del Límite del Mapa (Borde de advertencia)
+      ctx.strokeStyle = '#ff416c';
+      ctx.lineWidth = 5;
+      ctx.strokeRect(0 - camX, 0 - camY, MAP_SIZE, MAP_SIZE);
+      ctx.restore();
+
+      // Renderizado de Alimentos en pantalla
+      if (mode === 'bots') {
+        bots.foods.forEach(food => {
+          // Culling visual básico para omitir renderizados fuera del área visible de la pantalla
+          if (food.x - camX > -20 && food.x - camX < W + 20 && food.y - camY > -20 && food.y - camY < H + 20) {
+            ctx.beginPath();
+            ctx.arc(food.x - camX, food.y - camY, food.r, 0, Math.PI*2);
+            ctx.fillStyle = food.color;
+            ctx.fill();
+          }
+        });
+        
+        // Renderizado del set completo de serpientes locales (Bots + Jugador)
+        bots.list.forEach(snake => snake.draw(ctx, camX, camY));
+
+      } else if (mode === 'online') {
+        // Dibujado de alimentos distribuidos desde la red
+        onlineFoods.forEach(food => {
+          ctx.beginPath();
+          ctx.arc(food.x - camX, food.y - camY, food.r || 4, 0, Math.PI*2);
+          ctx.fillStyle = food.color || '#ff0';
+          ctx.fill();
+        });
+
+        // Dibujado adaptativo de objetos JSON remotos transformados a pantalla
+        Object.keys(onlineSnakes).forEach(id => {
+          let s = onlineSnakes[id];
+          if (!s.segs || s.segs.length === 0) return;
+
+          let skin = SKIN_COLORS[s.skin] || SKIN_COLORS[0];
+          let radius = s.radius || 18;
+
+          // Dibujar cuerpo remoto
+          for (let i = s.segs.length - 1; i >= 1; i--) {
+            ctx.beginPath();
+            ctx.arc(s.segs[i].x - camX, s.segs[i].y - camY, radius * 0.9, 0, Math.PI*2);
+            ctx.fillStyle = skin.body;
+            ctx.fill();
+          }
+          // Dibujar cabeza remota
+          ctx.beginPath();
+          ctx.arc(s.segs[0].x - camX, s.segs[0].y - camY, radius, 0, Math.PI*2);
+          ctx.fillStyle = skin.head;
+          ctx.fill();
+
+          // Nombre de red del cliente remoto
+          ctx.fillStyle = '#fff';
+          ctx.font = '12px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(s.name, s.segs[0].x - camX, s.segs[0].y - camY - (radius + 8));
+        });
+      }
+    }
+
+    // Inicializar el ciclo gráfico primario del entorno
+    requestAnimationFrame(frame);
+  </script>
 </body>
 </html>
