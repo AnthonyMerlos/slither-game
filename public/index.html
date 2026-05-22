@@ -1,1559 +1,865 @@
 <!DOCTYPE html>
-
 <html lang="es">
-
 <head>
-
 <meta charset="UTF-8">
-
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>Slither.io</title>
-
 <script src="/socket.io/socket.io.js"></script>
-
 <style>
-
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap');
-
 *{margin:0;padding:0;box-sizing:border-box}
-
 body{
-
   background:#1a1a2e;font-family:'Nunito',sans-serif;
-
   color:#e2e8f0;overflow:hidden;width:100vw;height:100vh;user-select:none;
-
 }
-
-
 
 /* ════════════ MENU ════════════ */
-
 #menu{
-
   position:fixed;inset:0;display:flex;flex-direction:column;
-
   align-items:center;justify-content:center;
-
   background:radial-gradient(ellipse at 50% 40%,#0f3460 0%,#080818 70%);
-
   z-index:100;
-
 }
-
 .logo{
-
   font-size:clamp(3rem,8vw,6rem);font-weight:900;
-
   letter-spacing:-2px;margin-bottom:4px;
-
   text-shadow:0 0 40px rgba(74,222,128,.5);
-
 }
-
 .logo .g{color:#4ade80}.logo .d{color:#a855f7}.logo .io{color:#a855f7}
 
-
-
 .snake-deco{margin-bottom:26px;animation:bob 2s ease-in-out infinite}
-
 @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
 
-
-
 #nickname{
-
   background:rgba(255,255,255,.08);border:2px solid rgba(74,222,128,.3);
-
   border-radius:30px;padding:14px 28px;color:#fff;
-
   font-size:1.2rem;font-family:'Nunito',sans-serif;
-
   width:300px;text-align:center;outline:none;
-
   transition:border-color .3s;margin-bottom:22px;
-
 }
-
 #nickname:focus{border-color:#4ade80}
-
 #nickname::placeholder{color:rgba(255,255,255,.3)}
 
-
-
 /* Mode buttons */
-
 .mode-wrap{display:flex;gap:16px;margin-bottom:26px}
-
 .mode-btn{
-
   display:flex;flex-direction:column;align-items:center;
-
   padding:18px 32px;border:none;border-radius:16px;
-
   font-family:'Nunito',sans-serif;cursor:pointer;
-
   transition:transform .15s,box-shadow .2s;
-
   min-width:140px;
-
 }
-
 .mode-btn .icon{font-size:2rem;margin-bottom:6px}
-
 .mode-btn .label{font-size:1.1rem;font-weight:900}
-
 .mode-btn .sub{font-size:.75rem;opacity:.75;margin-top:2px}
-
 .mode-btn:hover{transform:translateY(-4px)}
-
 .mode-btn:active{transform:scale(.96)}
 
-
-
 #btn-bots{
-
   background:linear-gradient(135deg,#22c55e,#16a34a);
-
   color:#fff;box-shadow:0 0 22px rgba(34,197,94,.4);
-
 }
-
 #btn-bots:hover{box-shadow:0 0 36px rgba(34,197,94,.7)}
 
-
-
 #btn-online{
-
   background:linear-gradient(135deg,#a855f7,#6d28d9);
-
   color:#fff;box-shadow:0 0 22px rgba(168,85,247,.4);
-
 }
-
 #btn-online:hover{box-shadow:0 0 36px rgba(168,85,247,.7)}
 
-
-
 /* Skin picker */
-
 .skin-label{font-size:.85rem;opacity:.55;margin-bottom:8px}
-
 .skin-row{display:flex;gap:10px}
-
 .skin-btn{
-
   width:40px;height:40px;border-radius:50%;cursor:pointer;
-
   border:3px solid transparent;transition:border-color .2s,transform .2s;
-
 }
-
 .skin-btn:hover,.skin-btn.active{border-color:#fff;transform:scale(1.18)}
 
-
-
 #online-status{
-
   margin-top:16px;font-size:.85rem;
-
   color:rgba(255,255,255,.4);min-height:20px;
-
 }
-
 #online-status.connected{color:#4ade80}
-
 #online-status.connecting{color:#facc15;animation:blink 1s ease-in-out infinite}
-
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 
-
-
 /* ════════════ CANVAS ════════════ */
-
 #gameCanvas{position:fixed;inset:0;display:none;cursor:none}
-
 #minimap{
-
   position:fixed;bottom:10px;right:10px;
-
   width:120px;height:120px;border-radius:8px;
-
   border:2px solid rgba(255,255,255,.2);display:none;
-
 }
-
-
 
 /* ════════════ HUD ════════════ */
-
 #hud{position:fixed;inset:0;pointer-events:none;display:none;z-index:10}
-
 #score-box{
-
   position:absolute;bottom:14px;left:14px;
-
   font-size:1rem;color:rgba(255,255,255,.85);
-
   text-shadow:1px 1px 4px #000;line-height:1.6;
-
 }
-
 #mode-badge{
-
   position:absolute;top:10px;left:10px;
-
   padding:4px 12px;border-radius:20px;font-size:.8rem;font-weight:700;
-
 }
-
 #mode-badge.bots{background:rgba(34,197,94,.25);color:#4ade80;border:1px solid rgba(34,197,94,.4)}
-
 #mode-badge.online{background:rgba(168,85,247,.25);color:#c084fc;border:1px solid rgba(168,85,247,.4)}
 
-
-
 #leaderboard{
-
   position:absolute;top:10px;right:10px;
-
   background:rgba(0,0,0,.5);border-radius:10px;
-
   padding:10px 14px;min-width:215px;font-size:.85rem;
-
   backdrop-filter:blur(4px);
-
 }
-
 #leaderboard h3{
-
   text-align:center;font-size:1rem;margin-bottom:8px;
-
   color:#fff;letter-spacing:1px;
-
 }
-
 .lb-row{display:flex;gap:6px;margin-bottom:4px;align-items:center}
-
 .lb-rank{color:#a78bfa;font-weight:700;width:26px}
-
 .lb-name{flex:1;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-
 .lb-score{color:#facc15;font-weight:700}
-
 .lb-row.me .lb-name{color:#4ade80;font-weight:900}
-
 .lb-row.me .lb-score{color:#4ade80}
 
-
-
 #boost-tip{
-
   position:absolute;bottom:14px;left:50%;
-
   transform:translateX(-50%);
-
   color:rgba(255,255,255,.35);font-size:.8rem;
-
 }
-
-
 
 /* ════════════ DEATH ════════════ */
-
 #death{
-
   position:fixed;inset:0;background:rgba(0,0,0,.78);
-
   display:none;flex-direction:column;
-
   align-items:center;justify-content:center;z-index:200;
-
 }
-
 #death h2{
-
   font-size:3.2rem;font-weight:900;color:#f87171;
-
   margin-bottom:10px;animation:shake .35s ease;
-
 }
-
 @keyframes shake{
-
   0%,100%{transform:translateX(0)}
-
   25%{transform:translateX(-12px)}75%{transform:translateX(12px)}
-
 }
-
 #death .stats{font-size:1.2rem;color:#e2e8f0;margin-bottom:30px;text-align:center}
-
 .death-btns{display:flex;gap:14px}
-
 .death-btn{
-
   padding:14px 34px;border:none;border-radius:30px;
-
   font-family:'Nunito',sans-serif;font-size:1.1rem;font-weight:900;
-
   cursor:pointer;transition:transform .15s;
-
 }
-
 #btn-respawn{
-
   background:linear-gradient(135deg,#4ade80,#22c55e);color:#000;
-
   box-shadow:0 0 22px rgba(74,222,128,.5);
-
 }
-
 #btn-menu{
-
   background:rgba(255,255,255,.1);color:#fff;
-
   border:2px solid rgba(255,255,255,.2);
-
 }
-
 .death-btn:hover{transform:scale(1.06)}
-
 </style>
-
 </head>
-
 <body>
 
-
-
 <!-- ════════════ MENU ════════════ -->
-
 <div id="menu">
-
   <div class="logo">
-
     <span class="g">slither</span><span class="d">.</span><span class="io">io</span>
-
   </div>
 
-
-
   <svg class="snake-deco" width="90" height="52" viewBox="0 0 90 52">
-
     <path d="M4 40 Q22 10 40 30 Q58 50 76 18" fill="none" stroke="#4ade80" stroke-width="11" stroke-linecap="round"/>
-
     <circle cx="76" cy="18" r="8" fill="#4ade80"/>
-
     <circle cx="73" cy="14.5" r="3" fill="#1a1a2e"/>
-
     <circle cx="79" cy="14.5" r="3" fill="#1a1a2e"/>
-
     <circle cx="73.8" cy="15.2" r="1.2" fill="#fff"/>
-
     <circle cx="79.8" cy="15.2" r="1.2" fill="#fff"/>
-
   </svg>
-
-
 
   <input id="nickname" type="text" placeholder="Tu apodo" maxlength="16" autocomplete="off"/>
 
-
-
   <div class="mode-wrap">
-
     <button class="mode-btn" id="btn-bots">
-
       <span class="icon">🤖</span>
-
       <span class="label">Bots</span>
-
       <span class="sub">Jugar solo</span>
-
     </button>
-
     <button class="mode-btn" id="btn-online">
-
       <span class="icon">🌐</span>
-
       <span class="label">Online</span>
-
       <span class="sub">Con amigos</span>
-
     </button>
-
   </div>
-
-
 
   <div class="skin-label">Elige tu color:</div>
-
   <div class="skin-row" id="skin-picker"></div>
-
   <div id="online-status">🌐 Conectado al servidor</div>
-
 </div>
-
-
 
 <!-- ════════════ CANVAS + MINIMAP ════════════ -->
-
 <canvas id="gameCanvas"></canvas>
-
 <canvas id="minimap"></canvas>
 
-
-
 <!-- ════════════ HUD ════════════ -->
-
 <div id="hud">
-
   <div id="mode-badge"></div>
-
   <div id="score-box">
-
     <div>Longitud: <span id="len-val">10</span></div>
-
     <div>Rango: <span id="rank-val">-</span> / <span id="total-val">-</span></div>
-
   </div>
-
   <div id="leaderboard">
-
     <h3>Leaderboard</h3>
-
     <div id="lb-list"></div>
-
   </div>
-
   <div id="boost-tip">Clic izquierdo / Espacio = Boost ⚡</div>
-
 </div>
-
-
 
 <!-- ════════════ DEATH ════════════ -->
-
 <div id="death">
-
   <h2>💀 ¡Eliminado!</h2>
-
   <div class="stats" id="death-stats"></div>
-
   <div class="death-btns">
-
     <button class="death-btn" id="btn-respawn">▶ Jugar de nuevo</button>
-
     <button class="death-btn" id="btn-menu">🏠 Menú</button>
-
   </div>
-
 </div>
 
-
-
 <script>
-
 // ============================================================
-
 //  SLITHER.IO — Cliente con MODO BOTS y MODO ONLINE
-
 // ============================================================
 
-
-
-const WORLD_W     = 4000, WORLD_H = 4000;
-
-const FOOD_COUNT  = 700;
-
-const BOT_COUNT   = 19;
-
+const WORLD_W      = 4000, WORLD_H = 4000;
+const FOOD_COUNT   = 700;
+const BOT_COUNT    = 19;
 const SNAKE_SPEED = 2.8;
-
 const BOOST_SPEED = 5.2;
-
 const TURN_SPEED  = 0.07;
-
 const SEGMENT_GAP = 8;
-
 const BASE_RADIUS = 7;
 
-
-
 const SKIN_COLORS = [
-
   { head:'#4ade80', body:'#22c55e' },
-
   { head:'#a855f7', body:'#7c3aed' },
-
   { head:'#f97316', body:'#ea580c' },
-
   { head:'#06b6d4', body:'#0891b2' },
-
   { head:'#f43f5e', body:'#e11d48' },
-
   { head:'#facc15', body:'#eab308' },
-
   { head:'#fb923c', body:'#f97316' },
-
   { head:'#38bdf8', body:'#0ea5e9' },
-
 ];
-
-
 
 const BOT_NAMES = [
-
   'Risa Kitty','FREE PREMi','Star','[DVL] Hosky','yender',
-
   '[DVL] Remix?','NightBot','MUJICA','xSnake','ProGamer',
-
   'NightCrawler','ZeroX','BlazeFire','ShadowByte','TurboWorm',
-
   'CryptoSlith','Nexus','Orion','VenomX',
-
 ];
 
-
-
 // ── Canvas ────────────────────────────────────────────────
-
 const canvas = document.getElementById('gameCanvas');
-
 const ctx    = canvas.getContext('2d');
-
 const mmCvs  = document.getElementById('minimap');
-
 const mmCtx  = mmCvs.getContext('2d');
-
 let W, H;
 
-
-
 function resize() {
-
   W = canvas.width  = window.innerWidth;
-
   H = canvas.height = window.innerHeight;
-
   mmCvs.width = mmCvs.height = 120;
-
 }
-
 resize();
-
 window.addEventListener('resize', resize);
 
-
-
 // ── Global state ──────────────────────────────────────────
-
 let gameMode   = null;  // 'bots' | 'online'
-
 let gameActive = false;
-
 let selectedSkin = 0;
-
 let mouseX = 0, mouseY = 0, boosting = false;
-
 let animId = null;
 
-
-
 // ── Socket ────────────────────────────────────────────────
-
 const socket = io({ autoConnect: true });
 
-
-
 socket.on('connect', () => {
-
   const el = document.getElementById('online-status');
-
   el.textContent = '🟢 Servidor listo — elige modo';
-
   el.className = 'connected';
-
 });
-
 socket.on('disconnect', () => {
-
   const el = document.getElementById('online-status');
-
   el.textContent = '🔴 Sin conexión al servidor';
-
   el.className = '';
-
 });
-
 socket.on('player_count', n => {
-
   if (gameMode === 'online') return;
-
   const el = document.getElementById('online-status');
-
   el.textContent = `🌐 ${n} jugador${n!==1?'es':''} en línea ahora`;
-
 });
-
-
 
 // ── Online handlers ───────────────────────────────────────
-
 socket.on('init', (data) => {
-
   online.myId   = data.id;
-
   online.snakes = data.snakes;
-
   online.foods  = data.foods;
-
   const me = online.snakes[online.myId];
-
   if (me) {
-
     online.cam.x = me.segs[0].x - W/2;
-
     online.cam.y = me.segs[0].y - H/2;
-
   }
-
   showGame('online');
-
 });
-
-
 
 socket.on('state', (data) => {
-
   if (gameMode !== 'online') return;
-
   for (const [id, s] of Object.entries(data.snakes)) online.snakes[id] = s;
-
   if (data.eatenFoodIds?.length) {
-
     const eaten = new Set(data.eatenFoodIds);
-
     online.foods = online.foods.filter(f => !eaten.has(f.id));
-
   }
-
   updateLB(data.lb, online.myId, Object.keys(online.snakes).length);
-
   const me = online.snakes[online.myId];
-
   if (me) document.getElementById('len-val').textContent = me.segs?.length || '-';
-
 });
-
-
 
 socket.on('snake_spawned', s  => { online.snakes[s.id] = s; });
-
 socket.on('snake_died',    d  => { if (online.snakes[d.id]) online.snakes[d.id].alive = false; });
-
 socket.on('snake_removed', d  => { delete online.snakes[d.id]; });
-
 socket.on('dead', (data) => {
-
   gameActive = false;
-
   showDeath(data.score, data.length);
-
 });
-
-
 
 // Send input to server every ~33ms
-
 setInterval(() => {
-
   if (gameMode !== 'online' || !gameActive) return;
-
   const angle = Math.atan2(mouseY - H/2, mouseX - W/2);
-
   socket.emit('input', { angle, boost: boosting });
-
 }, 33);
 
-
-
 // ── Online state ──────────────────────────────────────────
-
 const online = {
-
   myId: null, snakes: {}, foods: [],
-
   cam: { x: 0, y: 0 },
-
 };
 
-
-
 // ════════════════════════════════════════════════════════════
-
 //  BOTS MODE — fully local, no server
-
 // ════════════════════════════════════════════════════════════
-
 const bots = {
-
   foods: [], snakes: [], player: null,
-
   cam: { x: 0, y: 0 },
-
   lastTime: 0,
-
 };
-
-
 
 function dist2(ax, ay, bx, by) {
-
   const dx = ax-bx, dy = ay-by; return dx*dx+dy*dy;
-
 }
-
 function lerpAngle(snake, target, speed) {
-
   let d = target - snake.angle;
-
   while (d >  Math.PI) d -= 2*Math.PI;
-
   while (d < -Math.PI) d += 2*Math.PI;
-
   snake.angle += Math.sign(d) * Math.min(Math.abs(d), speed);
-
 }
-
 function snakeRadius(score) { return BASE_RADIUS + Math.min(score/150, 12); }
 
-
-
 function spawnBotFood(n=1) {
-
   for (let i=0;i<n;i++) {
-
     const hue = Math.random()*360;
-
+    // Valores de puntos según tamaño aleatorio (Chica: 5, Mediana: 10, Grande: 17)
+    const sizeType = Math.random();
+    let r, value;
+    if (sizeType < 0.6) {
+      r = 4; value = 5;
+    } else if (sizeType < 0.9) {
+      r = 6.5; value = 10;
+    } else {
+      r = 9; value = 17;
+    }
+    
     bots.foods.push({
-
       x: Math.random()*WORLD_W, y: Math.random()*WORLD_H,
-
-      r: 4+Math.random()*5,
-
+      r: r,
       color:`hsl(${hue},100%,60%)`, glow:`hsl(${hue},100%,80%)`,
-
-      value:1, pulse: Math.random()*Math.PI*2,
-
+      value: value, pulse: Math.random()*Math.PI*2,
+      isPoop: false
     });
-
   }
-
 }
-
-
 
 function createBotSnake(x, y, skin, name, isPlayer) {
-
   const segs = [];
-
   for (let i=0;i<10;i++) segs.push({x:x-i*SEGMENT_GAP, y});
-
   return {
-
     segs, name, skin, isPlayer,
-
     angle: Math.random()*Math.PI*2,
-
     alive: true, score: 0, boost: false,
-
-    ai: isPlayer ? null : { turnTimer: 0 },
-
+    boostTimer: 0,
+    ai: isPlayer ? null : { turnTimer: 0, targetSnake: null },
   };
-
 }
-
-
 
 function initBots() {
-
   bots.foods = []; bots.snakes = [];
-
   spawnBotFood(FOOD_COUNT);
-
   const px = WORLD_W/2 + (Math.random()-.5)*400;
-
   const py = WORLD_H/2 + (Math.random()-.5)*400;
-
   const playerName = document.getElementById('nickname').value.trim() || 'Jugador';
-
   bots.player = createBotSnake(px, py, SKIN_COLORS[selectedSkin], playerName, true);
-
   bots.snakes.push(bots.player);
-
   for (let i=0;i<BOT_COUNT;i++) {
-
     const bx=Math.random()*WORLD_W, by=Math.random()*WORLD_H;
-
     bots.snakes.push(createBotSnake(bx, by, SKIN_COLORS[i%SKIN_COLORS.length], BOT_NAMES[i], false));
-
   }
-
   bots.cam.x = px-W/2;
-
   bots.cam.y = py-H/2;
-
 }
-
-
 
 function updateBotAI(bot) {
-
   const ai = bot.ai, head = bot.segs[0];
-
   ai.turnTimer--;
-
   const margin = 200;
-
+  
+  // Límites del mapa
   if (head.x<margin)        { lerpAngle(bot,0,TURN_SPEED*2); return; }
-
   if (head.x>WORLD_W-margin){ lerpAngle(bot,Math.PI,TURN_SPEED*2); return; }
-
   if (head.y<margin)        { lerpAngle(bot,Math.PI/2,TURN_SPEED*2); return; }
-
   if (head.y>WORLD_H-margin){ lerpAngle(bot,-Math.PI/2,TURN_SPEED*2); return; }
-
-  // avoid other snakes
-
+  
+  // AGRESIVIDAD: Buscar cabezas enemigas cercanas para encerrarlas (Todos contra todos)
+  let targetEnemy = null;
+  let minEnemyDist = 180 * 180; // Rango de ataque/persecución
+  
   for (const other of bots.snakes) {
-
-    if (other===bot||!other.alive) continue;
-
-    for (let i=1;i<other.segs.length;i++) {
-
-      if (dist2(head.x,head.y,other.segs[i].x,other.segs[i].y) < (snakeRadius(bot.score)+snakeRadius(other.score)+50)**2) {
-
-        lerpAngle(bot, Math.atan2(head.y-other.segs[i].y, head.x-other.segs[i].x), TURN_SPEED*2);
-
-        return;
-
-      }
-
+    if (other === bot || !other.alive) continue;
+    const oHead = other.segs[0];
+    const d2 = dist2(head.x, head.y, oHead.x, oHead.y);
+    if (d2 < minEnemyDist) {
+      minEnemyDist = d2;
+      targetEnemy = other;
     }
-
+  }
+  
+  if (targetEnemy) {
+    const oHead = targetEnemy.segs[0];
+    // Intentar cortar el paso de forma agresiva prediciendo su posición
+    const interceptX = oHead.x + Math.cos(targetEnemy.angle) * 30;
+    const interceptY = oHead.y + Math.sin(targetEnemy.angle) * 30;
+    lerpAngle(bot, Math.atan2(interceptY - head.y, interceptX - head.x), TURN_SPEED * 1.5);
+    
+    // Si están muy cerca y el bot es grande o competitivo, activa turbo aleatoriamente
+    if (minEnemyDist < 100 * 100 && bot.score > 20 && Math.random() < 0.1) {
+      bot.boost = true;
+    }
+    return;
   }
 
-  // hunt food
-
+  // Esquivar cuerpos (Prioridad máxima para sobrevivir al atacar)
+  for (const other of bots.snakes) {
+    if (other===bot||!other.alive) continue;
+    for (let i=1; i<other.segs.length; i++) {
+      if (dist2(head.x,head.y,other.segs[i].x,other.segs[i].y) < (snakeRadius(bot.score)+snakeRadius(other.score)+45)**2) {
+        lerpAngle(bot, Math.atan2(head.y-other.segs[i].y, head.x-other.segs[i].x), TURN_SPEED*2.5);
+        return;
+      }
+    }
+  }
+  
+  // Cazar comida si no hay combate activo
   let nf=null, nd=Infinity;
-
   for (const f of bots.foods) {
-
     const d=dist2(head.x,head.y,f.x,f.y);
-
     if (d<nd){nd=d;nf=f;}
-
   }
-
-  if (nf && nd < 280*280) {
-
+  if (nf && nd < 320*320) {
     lerpAngle(bot, Math.atan2(nf.y-head.y,nf.x-head.x), TURN_SPEED);
-
   } else {
-
     if (ai.turnTimer<=0){ bot.angle+=(Math.random()-.5)*1.3; ai.turnTimer=30+Math.random()*60; }
-
   }
-
-  bot.boost = false;
-
+  if (Math.random() < 0.05) bot.boost = false;
 }
-
-
 
 function killBotSnake(snake) {
-
   snake.alive = false;
-
   for (const seg of snake.segs) {
-
-    if (Math.random()<.25) {
-
+    if (Math.random()<.35) {
       const hue=Math.random()*360;
+      const sizeVal = Math.random();
+      let r, value;
+      if (sizeVal < 0.5) { r = 5; value = 5; }
+      else if (sizeVal < 0.85) { r = 7.5; value = 10; }
+      else { r = 10; value = 17; }
 
       bots.foods.push({
-
         x:seg.x+(Math.random()-.5)*20, y:seg.y+(Math.random()-.5)*20,
-
-        r:5+Math.random()*8, color:`hsl(${hue},100%,60%)`,
-
-        glow:`hsl(${hue},100%,80%)`, value:2, pulse:0,
-
+        r: r, color:`hsl(${hue},100%,60%)`,
+        glow:`hsl(${hue},100%,80%)`, value: value, pulse:0,
+        isPoop: false
       });
-
     }
-
   }
-
   while (bots.foods.length < FOOD_COUNT) spawnBotFood(1);
-
   if (snake.isPlayer) {
-
-    setTimeout(()=>showDeath(snake.score, snake.segs.length), 200);
-
+    setTimeout(()=>showDeath(Math.floor(snake.score), snake.segs.length), 200);
   }
-
 }
-
-
 
 function updateBots(dt) {
-
-  // steer player
-
+  // Manejo del jugador local
   lerpAngle(bots.player, Math.atan2(mouseY-H/2, mouseX-W/2), TURN_SPEED*dt);
-
   bots.player.boost = boosting;
 
-
-
-  // move all
-
+  // Actualizar y mover todas las serpientes
   for (const s of bots.snakes) {
-
     if (!s.alive) continue;
-
     if (!s.isPlayer) updateBotAI(s);
-
-    const speed = s.boost ? BOOST_SPEED : SNAKE_SPEED;
+    
+    // Controlar consumo de puntos y expulsión de bolitas por Turbo (Boost)
+    const isUsingBoost = s.boost && s.score > 5;
+    const speed = isUsingBoost ? BOOST_SPEED : SNAKE_SPEED;
+    
+    if (isUsingBoost) {
+      s.boostTimer += dt;
+      if (s.boostTimer >= 4) { // Intervalo de gasto continuo de puntos
+        s.score = Math.max(0, s.score - 1.5); // Animación de bajar puntos reduciendo score de forma sutil
+        s.boostTimer = 0;
+        
+        // Dejar bolita pequeña detrás de su cola
+        const lastSeg = s.segs[s.segs.length - 1];
+        if (lastSeg) {
+          const hue = Math.random() * 360;
+          bots.foods.push({
+            x: lastSeg.x + (Math.random() - 0.5) * 10,
+            y: lastSeg.y + (Math.random() - 0.5) * 10,
+            r: 3.5, // Bolitas más pequeñas
+            color: s.skin.body,
+            glow: s.skin.head,
+            value: 5, // Equivale a la comida básica baja
+            pulse: 0,
+            isPoop: true
+          });
+        }
+      }
+    }
 
     const head  = s.segs[0];
-
     const nx    = head.x + Math.cos(s.angle)*speed*dt;
-
     const ny    = head.y + Math.sin(s.angle)*speed*dt;
-
     if (nx<0||nx>WORLD_W||ny<0||ny>WORLD_H){ killBotSnake(s); continue; }
-
+    
     s.segs.unshift({x:nx,y:ny});
-
-    while (s.segs.length > 10+s.score*.5) s.segs.pop();
-
+    
+    // Animación natural de encogimiento/crecimiento dinámico basada en score
+    const targetLength = 10 + Math.floor(s.score * 0.5);
+    while (s.segs.length > targetLength) s.segs.pop();
   }
 
-
-
-  // eat food
-
+  // Colisiones con comida y puntos dinámicos
   for (const s of bots.snakes) {
-
     if (!s.alive) continue;
-
     const head=s.segs[0], r=snakeRadius(s.score);
-
     for (let i=bots.foods.length-1;i>=0;i--) {
-
       const f=bots.foods[i];
-
       if (dist2(head.x,head.y,f.x,f.y)<(r+f.r)**2) {
-
-        s.score+=f.value; bots.foods.splice(i,1); spawnBotFood(1); break;
-
+        s.score+=f.value; 
+        bots.foods.splice(i,1); 
+        if(!f.isPoop) spawnBotFood(1); 
+        break;
       }
-
     }
-
   }
 
-
-
-  // collisions
-
+  // Colisiones cabeza-cuerpo (Choques mortales)
   for (let a=0;a<bots.snakes.length;a++) {
-
     const sa=bots.snakes[a]; if(!sa.alive)continue;
-
     const ha=sa.segs[0], ra=snakeRadius(sa.score);
-
     for (let b=0;b<bots.snakes.length;b++) {
-
       if (a===b)continue;
-
       const sb=bots.snakes[b]; if(!sb.alive)continue;
-
       const rb=snakeRadius(sb.score);
-
       for (let i=1;i<sb.segs.length;i++) {
-
         if (dist2(ha.x,ha.y,sb.segs[i].x,sb.segs[i].y)<(ra+rb)**2) {
-
           killBotSnake(sa); break;
-
         }
-
       }
-
       if (!sa.alive) break;
-
     }
-
   }
 
-
-
-  // respawn dead bots
-
+  // Revivir bots caídos automáticos
   for (let i=1;i<bots.snakes.length;i++) {
-
     if (!bots.snakes[i].alive) {
-
       const bx=Math.random()*WORLD_W, by=Math.random()*WORLD_H;
-
       const si=Math.floor(Math.random()*SKIN_COLORS.length);
-
       const ni=Math.floor(Math.random()*BOT_NAMES.length);
-
       bots.snakes[i]=createBotSnake(bx,by,SKIN_COLORS[si],BOT_NAMES[ni],false);
-
     }
-
   }
 
-
-
-  // food pulse
-
+  // Efecto visual de pulsación en comida
   for (const f of bots.foods) f.pulse+=0.08;
 
-
-
-  // camera
-
+  // Seguimiento de cámara suave
   if (bots.player.alive) {
-
     const h=bots.player.segs[0];
-
     bots.cam.x += (h.x-W/2-bots.cam.x)*.12;
-
     bots.cam.y += (h.y-H/2-bots.cam.y)*.12;
-
   }
 
-
-
-  // leaderboard
-
+  // Renderizar tabla de clasificación local
   const alive=bots.snakes.filter(s=>s.alive).sort((a,b)=>b.score-a.score);
-
   const lb=alive.slice(0,10).map(s=>({
-
-    id:s.isPlayer?'__player__':s.name, name:s.name, score:s.score
-
+    id:s.isPlayer?'__player__':s.name, name:s.name, score:Math.floor(s.score)
   }));
-
   updateLB(lb,'__player__',alive.length);
-
   document.getElementById('len-val').textContent=bots.player.segs.length;
-
 }
 
-
-
-// ════════════════════════════════════════════════════════════
-
-//  DRAW (shared)
-
-// ════════════════════════════════════════════════════════════
-
+// ── DRAW (shared) ────────────────────────────────────────
 function drawHexGrid(camX, camY) {
-
   const sz=28, hw=sz*Math.sqrt(3), hh=sz*2;
-
   const cols=Math.ceil(W/hw)+2, rows=Math.ceil(H/(hh*.75))+2;
-
   const ox=-(camX%hw), oy=-(camY%(hh*.75));
-
   ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.lineWidth=1;
-
   for (let r=-1;r<rows;r++) for (let c=-1;c<cols;c++) {
-
     const cx=ox+c*hw+(r%2===0?0:hw/2), cy=oy+r*hh*.75;
-
     ctx.beginPath();
-
     for (let i=0;i<6;i++){
-
       const a=Math.PI/180*(60*i-30);
-
       const px=cx+sz*Math.cos(a), py=cy+sz*Math.sin(a);
-
       i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
-
     }
-
     ctx.closePath(); ctx.stroke();
-
   }
-
 }
-
-
 
 function drawSnakeObj(s, isMe, camX, camY) {
-
   const segs=s.segs; if (!segs||segs.length<2) return;
-
   const skin=s.skin||SKIN_COLORS[0];
-
   const r=snakeRadius(s.score||0);
 
-
-
   ctx.shadowBlur=s.boost?18:0; ctx.shadowColor=skin.head;
-
   ctx.lineCap='round'; ctx.lineJoin='round'; ctx.lineWidth=r*2;
-
   for (let i=segs.length-1;i>0;i--) {
-
     const t=i/segs.length;
-
     ctx.beginPath();
-
     ctx.moveTo(segs[i].x,segs[i].y);
-
     ctx.lineTo(segs[i-1].x,segs[i-1].y);
-
     ctx.strokeStyle=skin.body;
-
     ctx.globalAlpha=0.55+0.45*(1-t);
-
     ctx.stroke();
-
   }
-
   ctx.globalAlpha=1; ctx.shadowBlur=0;
 
-
-
   const head=segs[0];
-
   ctx.beginPath(); ctx.arc(head.x,head.y,r*1.15,0,Math.PI*2);
-
   ctx.fillStyle=skin.head; ctx.fill();
 
-
-
-  // eyes
-
+  // Ojos (¡Todos conservan cabeza y ojos en modo local!)
   const ang=s.angle||0, eo=r*.5, er=r*.32;
-
   [ang-.5,ang+.5].forEach(a=>{
-
     const ex=head.x+Math.cos(a)*eo, ey=head.y+Math.sin(a)*eo;
-
     ctx.beginPath(); ctx.arc(ex,ey,er,0,Math.PI*2);
-
     ctx.fillStyle='#fff'; ctx.fill();
-
     ctx.beginPath();
-
     ctx.arc(ex+Math.cos(ang)*er*.4, ey+Math.sin(ang)*er*.4, er*.55,0,Math.PI*2);
-
     ctx.fillStyle='#111'; ctx.fill();
-
   });
 
-
-
-  // name
-
+  // Nombre visible
   ctx.font=`bold ${Math.max(10,r)}px Nunito`;
-
   ctx.textAlign='center';
-
   ctx.fillStyle=isMe?'#4ade80':'#fff';
-
   ctx.shadowBlur=4; ctx.shadowColor='#000';
-
   ctx.fillText(s.name||'',head.x,head.y-r*2);
-
   ctx.shadowBlur=0;
-
 }
-
-
 
 function drawFoodArr(foodArr) {
-
   const t=Date.now()/1000;
-
   for (const f of foodArr) {
-
     const sx=f.x-cam().x, sy=f.y-cam().y;
-
     if (sx<-20||sx>W+20||sy<-20||sy>H+20) continue;
-
     const pulse=1+Math.sin((f.pulse||t*3)+f.x*.01)*.15;
-
     ctx.shadowBlur=10; ctx.shadowColor=f.glow||f.color;
-
     ctx.beginPath(); ctx.arc(f.x,f.y,f.r*pulse,0,Math.PI*2);
-
     ctx.fillStyle=f.color; ctx.fill(); ctx.shadowBlur=0;
-
   }
-
 }
-
-
 
 function cam() {
-
   return gameMode==='bots' ? bots.cam : online.cam;
-
 }
-
-
 
 function drawMinimap(snakeList, foodArr, myIdOrPlayer) {
-
   const mw=120;
-
   mmCtx.fillStyle='rgba(10,15,30,.9)';
-
   mmCtx.fillRect(0,0,mw,mw);
-
   const sx=mw/WORLD_W, sy=mw/WORLD_H;
-
   for (const f of foodArr) {
-
     mmCtx.fillStyle=f.color;
-
     mmCtx.fillRect(f.x*sx-.5,f.y*sy-.5,1,1);
-
   }
-
   for (const s of snakeList) {
-
     if (!s||!s.segs||s.segs.length===0||s.alive===false) continue;
-
     const h=s.segs[0];
-
     const skin=s.skin||SKIN_COLORS[0];
-
     const isMe = gameMode==='bots'?s.isPlayer:(s.id===myIdOrPlayer||s===myIdOrPlayer);
-
     mmCtx.fillStyle=skin.head;
-
     mmCtx.beginPath(); mmCtx.arc(h.x*sx,h.y*sy,isMe?3:2,0,Math.PI*2); mmCtx.fill();
-
   }
-
   const c=cam();
-
   mmCtx.strokeStyle='rgba(255,255,255,.3)'; mmCtx.lineWidth=1;
-
   mmCtx.strokeRect(c.x*sx,c.y*sy,W*sx,H*sy);
-
 }
-
-
 
 // ── Main render loop ──────────────────────────────────────
-
 let lastTime = 0;
 
-
-
 function frame(ts) {
-
   const dt = Math.min((ts-lastTime)/16.67,3); lastTime=ts;
 
-
-
   ctx.clearRect(0,0,W,H);
-
   const c=cam();
-
   drawHexGrid(c.x,c.y);
 
-
-
   ctx.save();
-
   ctx.translate(-c.x,-c.y);
 
-
-
-  // world border
-
+  // Bordes del mundo
   ctx.strokeStyle='rgba(255,80,80,.2)'; ctx.lineWidth=4;
-
   ctx.strokeRect(0,0,WORLD_W,WORLD_H);
 
-
-
   if (gameMode==='bots') {
-
     updateBots(dt);
-
     drawFoodArr(bots.foods);
-
     for (const s of bots.snakes) if (!s.isPlayer&&s.alive) drawSnakeObj(s,false,c.x,c.y);
-
     if (bots.player.alive) drawSnakeObj(bots.player,true,c.x,c.y);
-
     drawMinimap(bots.snakes, bots.foods, null);
-
   } else {
-
-    // online cam lerp
-
+    // Código original intacto del online
     const me=online.snakes[online.myId];
-
     if (me?.segs?.length) {
-
       online.cam.x+=(me.segs[0].x-W/2-online.cam.x)*.12;
-
       online.cam.y+=(me.segs[0].y-H/2-online.cam.y)*.12;
-
     }
-
     drawFoodArr(online.foods);
-
     const snakeArr=Object.values(online.snakes);
-
     for (const s of snakeArr) if (s.id!==online.myId) drawSnakeObj(s,false,c.x,c.y);
-
     if (me?.segs) drawSnakeObj(me,true,c.x,c.y);
-
     drawMinimap(snakeArr.map(s=>({...s,segs:s.segs})), online.foods, online.myId);
-
   }
-
-
 
   ctx.restore();
-
   if (gameActive) animId=requestAnimationFrame(frame);
-
 }
-
-
 
 // ── LB update ─────────────────────────────────────────────
-
 function updateLB(lb, myId, total) {
-
   const list=document.getElementById('lb-list');
-
   list.innerHTML='';
-
   lb.forEach((e,i)=>{
-
     const isMe = gameMode==='bots' ? e.id==='__player__' : e.id===myId;
-
     const row=document.createElement('div');
-
     row.className='lb-row'+(isMe?' me':'');
-
     row.innerHTML=`<span class="lb-rank">#${i+1}</span><span class="lb-name">${e.name}</span><span class="lb-score">${e.score}</span>`;
-
     list.appendChild(row);
-
   });
-
   const rank=lb.findIndex(e=>gameMode==='bots'?e.id==='__player__':e.id===myId);
-
   document.getElementById('rank-val').textContent=rank>=0?rank+1:'>';
-
   document.getElementById('total-val').textContent=total;
-
 }
-
-
 
 // ── Show / Hide screens ───────────────────────────────────
-
 function showGame(mode) {
-
   gameMode=mode; gameActive=true;
-
   document.getElementById('menu').style.display='none';
-
   document.getElementById('death').style.display='none';
-
   canvas.style.display='block';
-
   mmCvs.style.display='block';
-
   document.getElementById('hud').style.display='block';
-
   const badge=document.getElementById('mode-badge');
-
   if (mode==='bots') { badge.textContent='🤖 Bots'; badge.className='mode-badge bots'; }
-
   else               { badge.textContent='🌐 Online'; badge.className='mode-badge online'; }
-
   if (animId) cancelAnimationFrame(animId);
-
   lastTime=performance.now();
-
   animId=requestAnimationFrame(frame);
-
 }
-
-
 
 function showDeath(score, length) {
-
   gameActive=false;
-
   document.getElementById('death-stats').innerHTML=
-
     `Longitud: <b>${length}</b> &nbsp;|&nbsp; Puntuación: <b>${score}</b>`;
-
   document.getElementById('death').style.display='flex';
-
 }
-
-
 
 function goMenu() {
-
   gameActive=false; gameMode=null;
-
   if (animId){cancelAnimationFrame(animId);animId=null;}
-
   canvas.style.display='none';
-
   mmCvs.style.display='none';
-
   document.getElementById('hud').style.display='none';
-
   document.getElementById('death').style.display='none';
-
   document.getElementById('menu').style.display='flex';
-
 }
 
-
-
 // ── Buttons ───────────────────────────────────────────────
-
 document.getElementById('btn-bots').addEventListener('click', ()=>{
-
   initBots(); showGame('bots');
-
 });
-
-
 
 document.getElementById('btn-online').addEventListener('click', ()=>{
-
   const name=document.getElementById('nickname').value.trim()||'Jugador';
-
   document.getElementById('online-status').textContent='Entrando…';
-
   document.getElementById('online-status').className='connecting';
-
   socket.emit('join',{name,skinIdx:selectedSkin});
-
 });
-
-
 
 document.getElementById('btn-respawn').addEventListener('click', ()=>{
-
   if (gameMode==='bots') {
-
     initBots(); showGame('bots');
-
   } else {
-
     const name=document.getElementById('nickname').value.trim()||'Jugador';
-
     socket.emit('respawn',{name,skinIdx:selectedSkin});
-
     document.getElementById('death').style.display='none';
-
     document.getElementById('hud').style.display='block';
-
     gameActive=true;
-
     lastTime=performance.now();
-
     animId=requestAnimationFrame(frame);
-
   }
-
 });
-
-
 
 document.getElementById('btn-menu').addEventListener('click', goMenu);
 
-
-
 // ── Input ─────────────────────────────────────────────────
-
 canvas.addEventListener('mousemove',e=>{mouseX=e.clientX;mouseY=e.clientY;});
-
 canvas.addEventListener('mousedown',e=>{if(e.button===0)boosting=true;});
-
 canvas.addEventListener('mouseup',  e=>{if(e.button===0)boosting=false;});
-
 window.addEventListener('keydown',  e=>{if(e.code==='Space'){e.preventDefault();boosting=true;}});
-
 window.addEventListener('keyup',    e=>{if(e.code==='Space')boosting=false;});
-
 canvas.addEventListener('touchmove',e=>{
-
   e.preventDefault();mouseX=e.touches[0].clientX;mouseY=e.touches[0].clientY;
-
 },{passive:false});
-
 canvas.addEventListener('touchstart',e=>{
-
   mouseX=e.touches[0].clientX;mouseY=e.touches[0].clientY;
-
   if(e.touches.length>=2)boosting=true;
-
 });
-
 canvas.addEventListener('touchend',e=>{if(e.touches.length<2)boosting=false;});
 
-
-
 // ── Skin picker ───────────────────────────────────────────
-
 const picker=document.getElementById('skin-picker');
-
 SKIN_COLORS.forEach((skin,i)=>{
-
   const btn=document.createElement('div');
-
   btn.className='skin-btn'+(i===0?' active':'');
-
   btn.style.background=`linear-gradient(135deg,${skin.head},${skin.body})`;
-
   btn.addEventListener('click',()=>{
-
     document.querySelectorAll('.skin-btn').forEach(b=>b.classList.remove('active'));
-
     btn.classList.add('active'); selectedSkin=i;
-
   });
-
   picker.appendChild(btn);
-
 });
-
 </script>
-
 </body>
-
-</html> 
+</html>
