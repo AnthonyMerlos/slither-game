@@ -305,9 +305,20 @@ socket.on('player_count', n => {
 socket.on('init', (data) => {
   online.myId   = data.id;
   online.snakes = data.snakes;
-  online.foods  = data.foods;
+  
+  // Asignamos puntajes e inicializamos las propiedades en las bolitas recibidas del servidor online
+  online.foods  = (data.foods || []).map(f => {
+    let val = 5;
+    if (f.r > 7) val = 17;
+    else if (f.r > 5) val = 10;
+    else if (f.r > 3) val = 3;
+    else val = 2;
+    return { ...f, value: val };
+  });
+
   const me = online.snakes[online.myId];
   if (me) {
+    if (!me.score) me.score = 0;
     online.cam.x = me.segs[0].x - W/2;
     online.cam.y = me.segs[0].y - H/2;
   }
@@ -316,21 +327,47 @@ socket.on('init', (data) => {
 
 socket.on('state', (data) => {
   if (gameMode !== 'online') return;
-  for (const [id, s] of Object.entries(data.snakes)) online.snakes[id] = s;
+  
+  // Conservamos el score calculado localmente en el cliente para el jugador principal
+  let currentLocalScore = online.snakes[online.myId]?.score || 0;
+  
+  for (const [id, s] of Object.entries(data.snakes)) {
+    online.snakes[id] = s;
+  }
+  
+  if (online.snakes[online.myId]) {
+    online.snakes[online.myId].score = currentLocalScore;
+  }
+
   if (data.eatenFoodIds?.length) {
     const eaten = new Set(data.eatenFoodIds);
     online.foods = online.foods.filter(f => !eaten.has(f.id));
   }
+  
+  // Incorporamos nuevas comidas que envíe el servidor de forma dinámica asignando puntaje
+  if (data.newFoods?.length) {
+    data.newFoods.forEach(f => {
+      let val = 5;
+      if (f.r > 7) val = 17;
+      else if (f.r > 5) val = 10;
+      else if (f.r > 3) val = 3;
+      else val = 2;
+      online.foods.push({ ...f, value: val });
+    });
+  }
+
   updateLB(data.lb, online.myId, Object.keys(online.snakes).length);
   
-  // CORRECCIÓN: Asegura que el contador visual "Longitud" tome el valor correcto del array del server
   const me = online.snakes[online.myId];
   if (me && me.segs) {
     document.getElementById('len-val').textContent = me.segs.length;
   }
 });
 
-socket.on('snake_spawned', s  => { online.snakes[s.id] = s; });
+socket.on('snake_spawned', s  => { 
+  online.snakes[s.id] = s; 
+  if(s.id === online.myId) online.snakes[s.id].score = 0;
+});
 socket.on('snake_died',    d  => { if (online.snakes[d.id]) online.snakes[d.id].alive = false; });
 socket.on('snake_removed', d  => { delete online.snakes[d.id]; });
 socket.on('dead', (data) => {
@@ -681,14 +718,6 @@ function drawFoodArr(foodArr) {
     ctx.shadowBlur=10; ctx.shadowColor=f.glow||f.color;
     ctx.beginPath(); ctx.arc(f.x,f.y,f.r*pulse,0,Math.PI*2);
     ctx.fillStyle=f.color; ctx.fill(); ctx.shadowBlur=0;
-
-    if (gameMode === 'online') {
-      ctx.font = 'bold 8px Nunito';
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-      ctx.textAlign = 'center';
-      let estimatedVal = f.r > 7 ? 17 : (f.r > 5 ? 10 : 5);
-      ctx.fillText('+' + estimatedVal, f.x, f.y - (f.r * pulse) - 4);
-    }
   }
 }
 
@@ -745,7 +774,31 @@ function frame(ts) {
     if (me?.segs?.length) {
       online.cam.x+=(me.segs[0].x-W/2-online.cam.x)*.12;
       online.cam.y+=(me.segs[0].y-H/2-online.cam.y)*.12;
+      
+      // NUEVO: Detección y ejecución visual de colisiones en tiempo real exclusiva de Online
+      const head = me.segs[0];
+      const r = snakeRadius(me.score || 0);
+      
+      for (let i = online.foods.length - 1; i >= 0; i--) {
+        const f = online.foods[i];
+        if (dist2(head.x, head.y, f.x, f.y) < (r + f.r) ** 2) {
+          // Sumamos el valor correspondiente a los puntos locales (17, 10, 3, 2)
+          me.score = (me.score || 0) + f.value;
+          
+          // Agregamos físicamente nuevos segmentos proporcionales al tamaño comido
+          const tail = me.segs[me.segs.length - 1] || head;
+          const segmentsToAdd = Math.max(1, Math.floor(f.value * 0.3));
+          for (let j = 0; j < segmentsToAdd; j++) {
+            me.segs.push({ x: tail.x, y: tail.y });
+          }
+          
+          // Eliminamos la bolita de pantalla
+          online.foods.splice(i, 1);
+          break;
+        }
+      }
     }
+    
     drawFoodArr(online.foods);
     const snakeArr=Object.values(online.snakes);
     for (const s of snakeArr) if (s.id!==online.myId) drawSnakeObj(s,false,c.x,c.y);
@@ -765,7 +818,14 @@ function updateLB(lb, myId, total) {
     const isMe = gameMode==='bots' ? e.id==='__player__' : e.id===myId;
     const row=document.createElement('div');
     row.className='lb-row'+(isMe?' me':'');
-    row.innerHTML=`<span class="lb-rank">#${i+1}</span><span class="lb-name">${e.name}</span><span class="lb-score">${e.score}</span>`;
+    
+    // Si estamos en online, mostramos el score que calculamos en tiempo real
+    let finalScore = e.score;
+    if (gameMode === 'online' && isMe && online.snakes[online.myId]) {
+      finalScore = Math.floor(online.snakes[online.myId].score);
+    }
+    
+    row.innerHTML=`<span class="lb-rank">#${i+1}</span><span class="lb-name">${e.name}</span><span class="lb-score">${finalScore}</span>`;
     list.appendChild(row);
   });
   const rank=lb.findIndex(e=>gameMode==='bots'?e.id==='__player__':e.id===myId);
