@@ -339,14 +339,16 @@ socket.on('state', (data) => {
     data.eatenFoodIds.forEach(id => online.eatenLocalIds.delete(id));
   }
 
-  // ── CORRECCIÓN BUG COLA PEGADA ───────────────────────────────
-  // Se eliminó el bloque que copiaba segmentos viejos sobre los nuevos
-  // del servidor. Ese código fijaba la cola en una posición estática
-  // porque los segmentos extra nunca recibían movimiento posterior.
-  // Ahora el servidor es la fuente de verdad para los segmentos;
-  // solo conservamos el offset de puntaje calculado localmente.
   for (const [id, s] of Object.entries(data.snakes)) {
-    if (id === online.myId && online.snakes[id]) {
+    if (id === online.myId && online.snakes[id] && s.segs) {
+      const prev = online.snakes[id];
+      // Preservar longitud local si es mayor (evita que el gusano encoja al comer)
+      if (prev.segs && prev.segs.length > s.segs.length) {
+        const tail = s.segs[s.segs.length - 1];
+        while (s.segs.length < prev.segs.length) {
+          s.segs.push({ x: tail.x, y: tail.y });
+        }
+      }
       s.score = (s.score || 0) + online.localScoreOffset;
     }
     online.snakes[id] = s;
@@ -734,13 +736,31 @@ function frame(ts) {
   } else {
     const me=online.snakes[online.myId];
     if (me?.segs?.length && me.alive !== false) {
-      online.cam.x+=(me.segs[0].x-W/2-online.cam.x)*.12;
-      online.cam.y+=(me.segs[0].y-H/2-online.cam.y)*.12;
+      // Camara suave
+      online.cam.x+=(me.segs[0].x-W/2-online.cam.x)*.15;
+      online.cam.y+=(me.segs[0].y-H/2-online.cam.y)*.15;
+
+      // Prediccion local: mover la cabeza del jugador suavemente hacia el angulo del mouse
+      const angle = Math.atan2(mouseY - H/2, mouseX - W/2);
+      const speed = boosting ? BOOST_SPEED : SNAKE_SPEED;
       const head = me.segs[0];
+      // Interpolar angulo actual del gusano
+      if (me.angle === undefined) me.angle = angle;
+      let da = angle - me.angle;
+      while (da > Math.PI) da -= 2*Math.PI;
+      while (da < -Math.PI) da += 2*Math.PI;
+      me.angle += Math.sign(da) * Math.min(Math.abs(da), TURN_SPEED * dt * 1.5);
+
+      const nx = head.x + Math.cos(me.angle) * speed * dt;
+      const ny = head.y + Math.sin(me.angle) * speed * dt;
+      me.segs.unshift({ x: nx, y: ny });
+      me.segs.pop();
+
+      // Deteccion local de comida
       const r = snakeRadius(me.score || 0);
       for (let i = online.foods.length - 1; i >= 0; i--) {
         const f = online.foods[i];
-        if (dist2(head.x, head.y, f.x, f.y) < (r + f.r + 4) ** 2) {
+        if (dist2(nx, ny, f.x, f.y) < (r + f.r + 4) ** 2) {
           if (f.id) online.eatenLocalIds.add(f.id);
           online.localScoreOffset += f.value;
           me.score = (me.score || 0) + f.value;
@@ -748,7 +768,7 @@ function frame(ts) {
           if (f.value >= 17) segsToAdd = 4;
           else if (f.value >= 12) segsToAdd = 3;
           else if (f.value >= 10) segsToAdd = 2;
-          const tail = me.segs[me.segs.length - 1] || head;
+          const tail = me.segs[me.segs.length - 1];
           for (let j = 0; j < segsToAdd; j++) {
             me.segs.push({ x: tail.x, y: tail.y });
           }
@@ -756,7 +776,22 @@ function frame(ts) {
           break;
         }
       }
+
+      // Boost: consume cola
+      if (boosting && me.score > 5) {
+        if (!me._boostTimer) me._boostTimer = 0;
+        me._boostTimer += dt;
+        if (me._boostTimer >= 4) {
+          me.score = Math.max(0, me.score - 1);
+          online.localScoreOffset = Math.max(online.localScoreOffset - 1, 0);
+          if (me.segs.length > 10) me.segs.pop();
+          me._boostTimer = 0;
+        }
+      } else {
+        me._boostTimer = 0;
+      }
     }
+
     drawFoodArr(online.foods);
     const snakeArr=Object.values(online.snakes);
     for (const s of snakeArr) if (s.id!==online.myId && s.alive !== false) drawSnakeObj(s,false);
