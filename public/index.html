@@ -342,13 +342,20 @@ socket.on('state', (data) => {
   for (const [id, s] of Object.entries(data.snakes)) {
     if (id === online.myId && online.snakes[id] && s.segs) {
       const prev = online.snakes[id];
-      // Preservar longitud local si es mayor (evita que el gusano encoja al comer)
+      // Interpolar suavemente la cabeza para evitar teletransporte
+      if (prev.segs && prev.segs.length > 0 && s.segs.length > 0) {
+        s.segs[0].x = prev.segs[0].x * 0.7 + s.segs[0].x * 0.3;
+        s.segs[0].y = prev.segs[0].y * 0.7 + s.segs[0].y * 0.3;
+      }
+      // Preservar longitud local si es mayor
       if (prev.segs && prev.segs.length > s.segs.length) {
         const tail = s.segs[s.segs.length - 1];
         while (s.segs.length < prev.segs.length) {
           s.segs.push({ x: tail.x, y: tail.y });
         }
       }
+      // Conservar angulo local
+      if (prev.angle !== undefined) s.angle = prev.angle;
       s.score = (s.score || 0) + online.localScoreOffset;
     }
     online.snakes[id] = s;
@@ -749,7 +756,7 @@ function frame(ts) {
       let da = angle - me.angle;
       while (da > Math.PI) da -= 2*Math.PI;
       while (da < -Math.PI) da += 2*Math.PI;
-      me.angle += Math.sign(da) * Math.min(Math.abs(da), TURN_SPEED * dt * 1.5);
+      me.angle += Math.sign(da) * Math.min(Math.abs(da), TURN_SPEED * dt);
 
       const nx = head.x + Math.cos(me.angle) * speed * dt;
       const ny = head.y + Math.sin(me.angle) * speed * dt;
