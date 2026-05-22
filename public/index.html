@@ -761,27 +761,33 @@ function frame(ts) {
       const nx = head.x + Math.cos(me.angle) * speed * dt;
       const ny = head.y + Math.sin(me.angle) * speed * dt;
       me.segs.unshift({ x: nx, y: ny });
-      me.segs.pop();
 
       // Deteccion local de comida
       const r = snakeRadius(me.score || 0);
+      let ate = false;
       for (let i = online.foods.length - 1; i >= 0; i--) {
         const f = online.foods[i];
         if (dist2(nx, ny, f.x, f.y) < (r + f.r + 4) ** 2) {
           if (f.id) online.eatenLocalIds.add(f.id);
           online.localScoreOffset += f.value;
           me.score = (me.score || 0) + f.value;
+          // Calcular longitud objetivo aumentada
           let segsToAdd = 1;
           if (f.value >= 17) segsToAdd = 4;
           else if (f.value >= 12) segsToAdd = 3;
           else if (f.value >= 10) segsToAdd = 2;
-          const tail = me.segs[me.segs.length - 1];
-          for (let j = 0; j < segsToAdd; j++) {
-            me.segs.push({ x: tail.x, y: tail.y });
-          }
+          if (!me._targetLen) me._targetLen = me.segs.length;
+          me._targetLen += segsToAdd;
           online.foods.splice(i, 1);
+          ate = true;
           break;
         }
+      }
+
+      // Solo recortar si ya alcanzamos la longitud objetivo
+      if (!me._targetLen) me._targetLen = me.segs.length;
+      if (me.segs.length > me._targetLen) {
+        me.segs.pop();
       }
 
       // Boost: consume cola
